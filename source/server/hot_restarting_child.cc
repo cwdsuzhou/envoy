@@ -29,11 +29,50 @@ int HotRestartingChild::duplicateParentListenSocket(const std::string& address,
   wrapped_request.mutable_request()->mutable_pass_listen_socket()->set_worker_index(worker_index);
   sendHotRestartMessage(parent_address_, wrapped_request);
 
-  std::unique_ptr<HotRestartMessage> wrapped_reply = receiveHotRestartMessage(Blocking::Yes);
+  std::unique_ptr<HotRestartMessage> wrapped_reply =
+      receiveHotRestartMessage(Blocking::Yes, wrapped_request);
   if (!replyIsExpectedType(wrapped_reply.get(), HotRestartMessage::Reply::kPassListenSocket)) {
     return -1;
   }
   return wrapped_reply->reply().pass_listen_socket().fd();
+}
+
+std::vector<int> HotRestartingChild::duplicateParentConnectionSockets(const std::string& address) {
+  std::vector<int> vec;
+  if (restart_epoch_ == 0 || parent_terminated_) {
+    return vec;
+  }
+
+  HotRestartMessage wrapped_request;
+  wrapped_request.mutable_request()->mutable_pass_connection_socket()->set_address(address);
+  sendHotRestartMessage(parent_address_, wrapped_request);
+
+  std::unique_ptr<HotRestartMessage> wrapped_reply =
+      receiveHotRestartMessage(Blocking::Yes, wrapped_request);
+  if (!replyIsExpectedType(wrapped_reply.get(), HotRestartMessage::Reply::kPassConnectionSocket)) {
+    return vec;
+  }
+  for (auto fd : wrapped_reply->reply().pass_connection_socket().fds()) {
+    vec.push_back(fd);
+  }
+  return vec;
+}
+
+std::unique_ptr<HotRestartMessage> HotRestartingChild::getConnectionData(int32_t conn_id) {
+  if (restart_epoch_ == 0 || parent_terminated_) {
+    return nullptr;
+  }
+
+  HotRestartMessage wrapped_request;
+  wrapped_request.mutable_request()->mutable_pass_connection_data()->set_connection_id(conn_id);
+  sendHotRestartMessage(parent_address_, wrapped_request);
+
+  std::unique_ptr<HotRestartMessage> wrapped_reply =
+      receiveHotRestartMessage(Blocking::Yes, wrapped_request);
+  RELEASE_ASSERT(
+      replyIsExpectedType(wrapped_reply.get(), HotRestartMessage::Reply::kPassConnectionData),
+      "Hot restart parent did not respond as expected to get connection data request.");
+  return wrapped_reply;
 }
 
 std::unique_ptr<HotRestartMessage> HotRestartingChild::getParentStats() {
@@ -45,7 +84,8 @@ std::unique_ptr<HotRestartMessage> HotRestartingChild::getParentStats() {
   wrapped_request.mutable_request()->mutable_stats();
   sendHotRestartMessage(parent_address_, wrapped_request);
 
-  std::unique_ptr<HotRestartMessage> wrapped_reply = receiveHotRestartMessage(Blocking::Yes);
+  std::unique_ptr<HotRestartMessage> wrapped_reply =
+      receiveHotRestartMessage(Blocking::Yes, wrapped_request);
   RELEASE_ASSERT(replyIsExpectedType(wrapped_reply.get(), HotRestartMessage::Reply::kStats),
                  "Hot restart parent did not respond as expected to get stats request.");
   return wrapped_reply;
@@ -71,7 +111,8 @@ HotRestartingChild::sendParentAdminShutdownRequest() {
   wrapped_request.mutable_request()->mutable_shutdown_admin();
   sendHotRestartMessage(parent_address_, wrapped_request);
 
-  std::unique_ptr<HotRestartMessage> wrapped_reply = receiveHotRestartMessage(Blocking::Yes);
+  std::unique_ptr<HotRestartMessage> wrapped_reply =
+      receiveHotRestartMessage(Blocking::Yes, wrapped_request);
   RELEASE_ASSERT(replyIsExpectedType(wrapped_reply.get(), HotRestartMessage::Reply::kShutdownAdmin),
                  "Hot restart parent did not respond as expected to ShutdownParentAdmin.");
   return HotRestart::AdminShutdownResponse{

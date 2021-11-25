@@ -103,6 +103,8 @@ public:
   // Server::HotRestart
   void drainParentListeners() override;
   int duplicateParentListenSocket(const std::string& address, uint32_t worker_index) override;
+  std::vector<int> duplicateParentConnectionSockets(const std::string& address) override;
+  std::unique_ptr<envoy::HotRestartMessage> getConnectionData(int32_t conn_id) override;
   void initialize(Event::Dispatcher& dispatcher, Server::Instance& server) override;
   absl::optional<AdminShutdownResponse> sendParentAdminShutdownRequest() override;
   void sendParentTerminateRequest() override;

@@ -18,6 +18,12 @@ public:
   // Server::HotRestart
   void drainParentListeners() override {}
   int duplicateParentListenSocket(const std::string&, uint32_t) override { return -1; }
+
+  std::vector<int> duplicateParentConnectionSockets(const std::string&) override {
+    std::vector<int> a;
+    return a;
+  }
+  std::unique_ptr<envoy::HotRestartMessage> getConnectionData(int32_t) override { return nullptr; }
   void initialize(Event::Dispatcher&, Server::Instance&) override {}
   absl::optional<AdminShutdownResponse> sendParentAdminShutdownRequest() override {
     return absl::nullopt;

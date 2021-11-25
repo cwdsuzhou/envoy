@@ -2,6 +2,7 @@
 
 #include "envoy/server/instance.h"
 
+#include "source/common/buffer/buffer_impl.h"
 #include "source/common/memory/stats.h"
 #include "source/common/network/utility.h"
 #include "source/common/stats/stat_merger.h"
@@ -34,7 +35,7 @@ void HotRestartingParent::initialize(Event::Dispatcher& dispatcher, Server::Inst
 
 void HotRestartingParent::onSocketEvent() {
   std::unique_ptr<HotRestartMessage> wrapped_request;
-  while ((wrapped_request = receiveHotRestartMessage(Blocking::No))) {
+  while ((wrapped_request = receiveHotRestartMessage(Blocking::No, *wrapped_request.get()))) {
     if (wrapped_request->requestreply_case() == HotRestartMessage::kReply) {
       ENVOY_LOG(error, "child sent us a HotRestartMessage reply (we want requests); ignoring.");
       HotRestartMessage wrapped_reply;
@@ -51,6 +52,18 @@ void HotRestartingParent::onSocketEvent() {
     case HotRestartMessage::Request::kPassListenSocket: {
       sendHotRestartMessage(child_address_,
                             internal_->getListenSocketsForChild(wrapped_request->request()));
+      break;
+    }
+
+    case HotRestartMessage::Request::kPassConnectionSocket: {
+      sendHotRestartMessage(child_address_,
+                            internal_->getConnectionSocketsForChild(wrapped_request->request()));
+      break;
+    }
+
+    case HotRestartMessage::Request::kPassConnectionData: {
+      sendHotRestartMessage(child_address_,
+                            internal_->getConnectionDataForChild(wrapped_request->request()));
       break;
     }
 
@@ -120,6 +133,49 @@ HotRestartingParent::Internal::getListenSocketsForChild(const HotRestartMessage:
       break;
     }
   }
+  return wrapped_reply;
+}
+
+HotRestartMessage HotRestartingParent::Internal::getConnectionSocketsForChild(
+    const HotRestartMessage::Request& request) {
+  HotRestartMessage wrapped_reply;
+  Network::Address::InstanceConstSharedPtr addr =
+      Network::Utility::resolveUrl(request.pass_connection_socket().address());
+  for (const auto& listener : server_->listenerManager().listeners()) {
+    Network::ListenSocketFactory& socket_factory = listener.get().listenSocketFactory();
+    ENVOY_LOG(info, "address {}, socket {}", socket_factory.localAddress()->asString(), socket_factory
+                                                                                 .getListenSockets().size());
+    if (*socket_factory.localAddress() != *addr && listener.get().bindToPort()) {
+      // worker_index() will default to 0 if not set which is the behavior before this field
+      // was added. Thus, this should be safe for both roll forward and roll back.
+      wrapped_reply.mutable_reply()->mutable_pass_connection_socket()->add_fds(
+          socket_factory.getListenSocket(1)->ioHandle()
+              .fdDoNotUse());
+    }
+  }
+  return wrapped_reply;
+}
+
+HotRestartMessage HotRestartingParent::Internal::getConnectionDataForChild(
+    const HotRestartMessage::Request& request) {
+  HotRestartMessage wrapped_reply;
+  Buffer::OwnedImpl buffer;
+  auto id = request.pass_connection_data().connection_id();
+  for (const auto& listener : server_->listenerManager().listeners()) {
+    Network::ListenSocketFactory& socket_factory = listener.get().listenSocketFactory();
+    auto listenerd = socket_factory.getListenSocket(id);
+    ASSERT(listenerd, nullptr);
+    auto& handler = listenerd->ioHandle();
+    if (handler.isOpen()) {
+      Api::IoCallUint64Result result = handler.read(buffer, absl::nullopt);
+      if (!result.ok()) {
+      }
+    }
+  }
+  auto buf = buffer.toString();
+  wrapped_reply.mutable_reply()->mutable_pass_connection_data()->set_connection_id(id);
+  wrapped_reply.mutable_reply()->mutable_pass_connection_data()->set_allocated_connection_data(
+      &buf);
   return wrapped_reply;
 }
 

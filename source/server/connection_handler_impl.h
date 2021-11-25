@@ -69,7 +69,7 @@ private:
     Network::ConnectionHandler::ActiveListenerPtr listener_;
 
     absl::variant<absl::monostate, std::reference_wrapper<ActiveTcpListener>,
-                  std::reference_wrapper<Network::UdpListenerCallbacks>>
+        std::reference_wrapper<Network::UdpListenerCallbacks>>
         typed_listener_;
 
     // Helpers for accessing the data in the variant for cleaner code.

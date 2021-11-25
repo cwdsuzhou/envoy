@@ -327,12 +327,17 @@ private:
       socket_create_ = true;
       return socket_;
     }
+    std::vector<Network::SocketSharedPtr>& getListenSockets() override {
+      return sockets_;
+    }
+
     Network::ListenSocketFactoryPtr clone() const override { return nullptr; }
     void closeAllSockets() override {}
     void doFinalPreWorkerInit() override {}
 
   private:
     Network::SocketSharedPtr socket_;
+    std::vector<Network::SocketSharedPtr> sockets_;
     bool socket_create_{false};
   };
 

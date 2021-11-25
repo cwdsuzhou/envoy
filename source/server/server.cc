@@ -22,8 +22,8 @@
 #include "envoy/server/options.h"
 #include "envoy/stats/stats.h"
 #include "envoy/upstream/cluster_manager.h"
-
 #include "source/common/api/api_impl.h"
+
 #include "source/common/api/os_sys_calls_impl.h"
 #include "source/common/common/enum_to_int.h"
 #include "source/common/common/mutex_tracer_impl.h"
@@ -37,6 +37,7 @@
 #include "source/common/local_info/local_info_impl.h"
 #include "source/common/memory/stats.h"
 #include "source/common/network/address_impl.h"
+#include "source/common/network/io_socket_handle_impl.h"
 #include "source/common/network/socket_interface.h"
 #include "source/common/network/socket_interface_impl.h"
 #include "source/common/network/tcp_listener_impl.h"
@@ -716,6 +717,20 @@ void InstanceImpl::startWorkers() {
     hooks_.onWorkersStarted();
     // At this point we are ready to take traffic and all listening ports are up. Notify our
     // parent if applicable that they can stop listening and drain.
+
+    ENVOY_LOG(info, "runtime: server socket transfered");
+
+    // to remove drain when restart, start transfer.
+//    auto add = local_info_->address()->asString();
+//    auto fds = restarter_.duplicateParentConnectionSockets(add);
+//    for (auto& fd : fds) {
+//      Network::IoHandlePtr io_handle = std::make_unique<Network::IoSocketHandleImpl>(fd);
+//      if (io_handle->isOpen()) {
+//        Network::SocketSharedPtr uds = std::make_shared<Network::UdsListenSocket>(
+//            std::move(io_handle), io_handle->localAddress());
+//        ASSERT(uds, nullptr);
+//      }
+//    }
     restarter_.drainParentListeners();
     drain_manager_->startParentShutdownSequence();
   });

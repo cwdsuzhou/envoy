@@ -47,6 +47,13 @@ public:
   virtual SocketSharedPtr getListenSocket(uint32_t worker_index) PURE;
 
   /**
+   * Called during actual listener creation.
+   * @return the socket vector to be used for a certain listener, which might be shared
+   * with other listeners of the same config on other worker threads.
+   */
+  virtual std::vector<SocketSharedPtr>& getListenSockets() PURE;
+
+  /**
    * @return the type of the socket getListenSocket() returns.
    */
   virtual Socket::Type socketType() const PURE;

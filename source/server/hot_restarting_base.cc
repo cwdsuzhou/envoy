@@ -99,17 +99,31 @@ void HotRestartingBase::sendHotRestartMessage(sockaddr_un& address,
     message.msg_iovlen = 1;
 
     // Control data stuff, only relevant for the fd passing done with PassListenSocketReply.
-    uint8_t control_buffer[CMSG_SPACE(sizeof(int))];
-    if (replyIsExpectedType(&proto, HotRestartMessage::Reply::kPassListenSocket) &&
-        proto.reply().pass_listen_socket().fd() != -1) {
-      memset(control_buffer, 0, CMSG_SPACE(sizeof(int)));
+    if ((replyIsExpectedType(&proto, HotRestartMessage::Reply::kPassListenSocket) &&
+         proto.reply().pass_listen_socket().fd() != -1) ||
+        (replyIsExpectedType(&proto, HotRestartMessage::Reply::kPassConnectionSocket) &&
+         proto.reply().pass_connection_socket().fds_size() > 0)) {
+
+      std::vector<int> vec;
+      if (replyIsExpectedType(&proto, HotRestartMessage::Reply::kPassConnectionSocket)) {
+        for (int i = 0; i < proto.reply().pass_connection_socket().fds_size(); ++i) {
+          vec.push_back(proto.reply().pass_connection_socket().fds(i));
+          // fds[i] = proto.reply().pass_connection_socket().fds(i);
+        }
+      } else {
+        vec.push_back(proto.reply().pass_listen_socket().fd());
+      }
+      const int len = 1;
+      // int fds[len];
+      uint8_t control_buffer[CMSG_SPACE(sizeof(int) * len)];
+      memset(control_buffer, 0, CMSG_SPACE(sizeof(int) * len));
       message.msg_control = control_buffer;
-      message.msg_controllen = CMSG_SPACE(sizeof(int));
+      message.msg_controllen = CMSG_SPACE(sizeof(int) * len);
       cmsghdr* control_message = CMSG_FIRSTHDR(&message);
       control_message->cmsg_level = SOL_SOCKET;
       control_message->cmsg_type = SCM_RIGHTS;
-      control_message->cmsg_len = CMSG_LEN(sizeof(int));
-      *reinterpret_cast<int*>(CMSG_DATA(control_message)) = proto.reply().pass_listen_socket().fd();
+      control_message->cmsg_len = CMSG_LEN(sizeof(int) * len);
+      *reinterpret_cast<int*>(CMSG_DATA(control_message)) = *vec.data();
       ASSERT(sent == total_size, "an fd passing message was too long for one sendmsg().");
     }
 
@@ -196,7 +210,8 @@ std::unique_ptr<HotRestartMessage> HotRestartingBase::parseProtoAndResetState() 
   return ret;
 }
 
-std::unique_ptr<HotRestartMessage> HotRestartingBase::receiveHotRestartMessage(Blocking block) {
+std::unique_ptr<HotRestartMessage>
+HotRestartingBase::receiveHotRestartMessage(Blocking block, const envoy::HotRestartMessage& proto) {
   // By default the domain socket is non blocking. If we need to block, make it blocking first.
   if (block == Blocking::Yes) {
     RELEASE_ASSERT(fcntl(my_domain_socket_, F_SETFL, 0) != -1,
@@ -204,22 +219,28 @@ std::unique_ptr<HotRestartMessage> HotRestartingBase::receiveHotRestartMessage(B
   }
 
   initRecvBufIfNewMessage();
-
+  const int buff_len = 1;
+  if (replyIsExpectedType(&proto, HotRestartMessage::Reply::kPassConnectionSocket)) {
+    *const_cast<int*>(&buff_len) = proto.reply().pass_connection_socket().fds_size();
+  }
+  // const int buff_len = 1;
+  int fds[buff_len];
+  const size_t size = CMSG_SPACE(sizeof(fds));
   iovec iov[1];
   msghdr message;
-  uint8_t control_buffer[CMSG_SPACE(sizeof(int))];
+  uint8_t control_buffer[size];
   std::unique_ptr<HotRestartMessage> ret = nullptr;
   while (!ret) {
     iov[0].iov_base = recv_buf_.data() + cur_msg_recvd_bytes_;
     iov[0].iov_len = MaxSendmsgSize;
 
     // We always setup to receive an FD even though most messages do not pass one.
-    memset(control_buffer, 0, CMSG_SPACE(sizeof(int)));
+    memset(control_buffer, 0, size);
     memset(&message, 0, sizeof(message));
     message.msg_iov = iov;
     message.msg_iovlen = 1;
     message.msg_control = control_buffer;
-    message.msg_controllen = CMSG_SPACE(sizeof(int));
+    message.msg_controllen = size;
 
     const int recvmsg_rc = recvmsg(my_domain_socket_, &message, 0);
     if (block == Blocking::No && recvmsg_rc == -1 && errno == SOCKET_ERROR_AGAIN) {

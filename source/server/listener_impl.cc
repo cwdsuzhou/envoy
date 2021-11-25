@@ -169,6 +169,10 @@ Network::SocketSharedPtr ListenSocketFactoryImpl::getListenSocket(uint32_t worke
   return sockets_[worker_index];
 }
 
+std::vector<Network::SocketSharedPtr>& ListenSocketFactoryImpl::getListenSockets() {
+  return sockets_;
+}
+
 void ListenSocketFactoryImpl::doFinalPreWorkerInit() {
   if (bind_type_ == ListenerComponentFactory::BindType::NoBind ||
       socket_type_ != Network::Socket::Type::Stream) {

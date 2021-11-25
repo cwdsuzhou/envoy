@@ -51,6 +51,7 @@ public:
     return local_address_;
   }
   Network::SocketSharedPtr getListenSocket(uint32_t worker_index) override;
+  std::vector<Network::SocketSharedPtr>& getListenSockets() override;
   Network::ListenSocketFactoryPtr clone() const override {
     return absl::WrapUnique(new ListenSocketFactoryImpl(*this));
   }
