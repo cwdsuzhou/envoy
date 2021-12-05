@@ -721,16 +721,19 @@ void InstanceImpl::startWorkers() {
     ENVOY_LOG(info, "runtime: server socket transfered");
 
     // to remove drain when restart, start transfer.
-//    auto add = local_info_->address()->asString();
-//    auto fds = restarter_.duplicateParentConnectionSockets(add);
-//    for (auto& fd : fds) {
-//      Network::IoHandlePtr io_handle = std::make_unique<Network::IoSocketHandleImpl>(fd);
-//      if (io_handle->isOpen()) {
-//        Network::SocketSharedPtr uds = std::make_shared<Network::UdsListenSocket>(
-//            std::move(io_handle), io_handle->localAddress());
-//        ASSERT(uds, nullptr);
-//      }
-//    }
+    auto add = local_info_->address()->asString();
+    auto fds = restarter_.duplicateParentConnectionSockets(add);
+    ENVOY_LOG(info, "runtime: connection socket transfer finished fds size {}", fds.size());
+    for (auto& fd : fds) {
+      ENVOY_LOG(info, "runtime: uds, fd is : {}", fd);
+      Network::IoHandlePtr io_handle = std::make_unique<Network::IoSocketHandleImpl>(fd);
+      // bug exist here, skip now
+      break;
+      if (io_handle->isOpen()) {
+        Network::SocketSharedPtr uds = std::make_shared<Network::UdsListenSocket>(
+            std::move(io_handle), io_handle->localAddress());
+      }
+    }
     restarter_.drainParentListeners();
     drain_manager_->startParentShutdownSequence();
   });

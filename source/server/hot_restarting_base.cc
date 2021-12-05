@@ -84,6 +84,7 @@ void HotRestartingBase::sendHotRestartMessage(sockaddr_un& address,
 
   uint8_t* next_byte_to_send = send_buf.data();
   uint64_t sent = 0;
+  ENVOY_LOG(info, "sendHotRestartMessage internal {} started", proto.reply().reply_case());
   while (sent < total_size) {
     const uint64_t cur_chunk_size = std::min(MaxSendmsgSize, total_size - sent);
     iovec iov[1];
@@ -101,9 +102,7 @@ void HotRestartingBase::sendHotRestartMessage(sockaddr_un& address,
     // Control data stuff, only relevant for the fd passing done with PassListenSocketReply.
     if ((replyIsExpectedType(&proto, HotRestartMessage::Reply::kPassListenSocket) &&
          proto.reply().pass_listen_socket().fd() != -1) ||
-        (replyIsExpectedType(&proto, HotRestartMessage::Reply::kPassConnectionSocket) &&
-         proto.reply().pass_connection_socket().fds_size() > 0)) {
-
+        replyIsExpectedType(&proto, HotRestartMessage::Reply::kPassConnectionSocket)) {
       std::vector<int> vec;
       if (replyIsExpectedType(&proto, HotRestartMessage::Reply::kPassConnectionSocket)) {
         for (int i = 0; i < proto.reply().pass_connection_socket().fds_size(); ++i) {
@@ -113,6 +112,9 @@ void HotRestartingBase::sendHotRestartMessage(sockaddr_un& address,
       } else {
         vec.push_back(proto.reply().pass_listen_socket().fd());
       }
+
+      ENVOY_LOG(info, "sendHotRestartMessage internal vector size {}", vec.size());
+
       const int len = 1;
       // int fds[len];
       uint8_t control_buffer[CMSG_SPACE(sizeof(int) * len)];
@@ -123,7 +125,9 @@ void HotRestartingBase::sendHotRestartMessage(sockaddr_un& address,
       control_message->cmsg_level = SOL_SOCKET;
       control_message->cmsg_type = SCM_RIGHTS;
       control_message->cmsg_len = CMSG_LEN(sizeof(int) * len);
-      *reinterpret_cast<int*>(CMSG_DATA(control_message)) = *vec.data();
+      if (vec.size() > 0) {
+        *reinterpret_cast<int*>(CMSG_DATA(control_message)) = *vec.data();
+      }
       ASSERT(sent == total_size, "an fd passing message was too long for one sendmsg().");
     }
 
@@ -156,7 +160,7 @@ void HotRestartingBase::sendHotRestartMessage(sockaddr_un& address,
                                         saved_errno));
     }
   }
-
+  ENVOY_LOG(info, "sendHotRestartMessage internal {} finished", proto.reply().reply_case());
   RELEASE_ASSERT(fcntl(my_domain_socket_, F_SETFL, O_NONBLOCK) != -1,
                  fmt::format("Set domain socket nonblocking failed, errno = {}", errno));
 }
@@ -175,12 +179,20 @@ void HotRestartingBase::getPassedFdIfPresent(HotRestartMessage* out, msghdr* mes
   cmsghdr* cmsg = CMSG_FIRSTHDR(message);
   if (cmsg != nullptr) {
     RELEASE_ASSERT(cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS &&
-                       replyIsExpectedType(out, HotRestartMessage::Reply::kPassListenSocket),
+                       (replyIsExpectedType(out, HotRestartMessage::Reply::kPassListenSocket) ||
+                        replyIsExpectedType(out, HotRestartMessage::Reply::kPassConnectionSocket)),
                    "recvmsg() came with control data when the message's purpose was not to pass a "
                    "file descriptor.");
 
-    out->mutable_reply()->mutable_pass_listen_socket()->set_fd(
-        *reinterpret_cast<int*>(CMSG_DATA(cmsg)));
+    if (replyIsExpectedType(out, HotRestartMessage::Reply::kPassListenSocket)) {
+      out->mutable_reply()->mutable_pass_listen_socket()->set_fd(
+          *reinterpret_cast<int*>(CMSG_DATA(cmsg)));
+    }
+
+    if (replyIsExpectedType(out, HotRestartMessage::Reply::kPassConnectionSocket)) {
+      out->mutable_reply()->mutable_pass_connection_socket()->add_fds(
+          *reinterpret_cast<int*>(CMSG_DATA(cmsg)));
+    }
 
     RELEASE_ASSERT(CMSG_NXTHDR(message, cmsg) == nullptr,
                    "More than one control data on a single hot restart recvmsg().");
@@ -217,7 +229,7 @@ HotRestartingBase::receiveHotRestartMessage(Blocking block, const envoy::HotRest
     RELEASE_ASSERT(fcntl(my_domain_socket_, F_SETFL, 0) != -1,
                    fmt::format("Set domain socket blocking failed, errno = {}", errno));
   }
-
+  ENVOY_LOG(info, "receiveHotRestartMessage internal {} started");
   initRecvBufIfNewMessage();
   const int buff_len = 1;
   if (replyIsExpectedType(&proto, HotRestartMessage::Reply::kPassConnectionSocket)) {
@@ -272,11 +284,13 @@ HotRestartingBase::receiveHotRestartMessage(Blocking block, const envoy::HotRest
     }
   }
 
+  ENVOY_LOG(info, "receiveHotRestartMessage internal {} blocking");
   // Turn non-blocking back on if we made it blocking.
   if (block == Blocking::Yes) {
     RELEASE_ASSERT(fcntl(my_domain_socket_, F_SETFL, O_NONBLOCK) != -1,
                    fmt::format("Set domain socket nonblocking failed, errno = {}", errno));
   }
+  ENVOY_LOG(info, "receiveHotRestartMessage internal {} finished");
   getPassedFdIfPresent(ret.get(), &message);
   return ret;
 }

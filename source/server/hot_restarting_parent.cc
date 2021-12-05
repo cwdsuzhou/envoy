@@ -36,6 +36,8 @@ void HotRestartingParent::initialize(Event::Dispatcher& dispatcher, Server::Inst
 void HotRestartingParent::onSocketEvent() {
   std::unique_ptr<HotRestartMessage> wrapped_request;
   while ((wrapped_request = receiveHotRestartMessage(Blocking::No, *wrapped_request.get()))) {
+    ENVOY_LOG(info, "receive request {} content {}", wrapped_request->request().request_case(),
+              wrapped_request->request().SerializeAsString());
     if (wrapped_request->requestreply_case() == HotRestartMessage::kReply) {
       ENVOY_LOG(error, "child sent us a HotRestartMessage reply (we want requests); ignoring.");
       HotRestartMessage wrapped_reply;
@@ -116,6 +118,7 @@ HotRestartMessage HotRestartingParent::Internal::shutdownAdmin() {
 HotRestartMessage
 HotRestartingParent::Internal::getListenSocketsForChild(const HotRestartMessage::Request& request) {
   HotRestartMessage wrapped_reply;
+  ENVOY_LOG(info, "parse add {} started", request.pass_connection_socket().address());
   wrapped_reply.mutable_reply()->mutable_pass_listen_socket()->set_fd(-1);
   Network::Address::InstanceConstSharedPtr addr =
       Network::Utility::resolveUrl(request.pass_listen_socket().address());
@@ -139,18 +142,22 @@ HotRestartingParent::Internal::getListenSocketsForChild(const HotRestartMessage:
 HotRestartMessage HotRestartingParent::Internal::getConnectionSocketsForChild(
     const HotRestartMessage::Request& request) {
   HotRestartMessage wrapped_reply;
+  ENVOY_LOG(info, "parse add {} started", request.pass_connection_socket().address());
+  // auto add = child_address_.sun_path;
+  wrapped_reply.mutable_reply()->mutable_pass_connection_socket()->fds();
   Network::Address::InstanceConstSharedPtr addr =
       Network::Utility::resolveUrl(request.pass_connection_socket().address());
+  ENVOY_LOG(info, "parse add {} finished", request.pass_connection_socket().address());
+  ENVOY_LOG(info, "get connection sockets for child for address {}", addr->asString());
   for (const auto& listener : server_->listenerManager().listeners()) {
     Network::ListenSocketFactory& socket_factory = listener.get().listenSocketFactory();
-    ENVOY_LOG(info, "address {}, socket {}", socket_factory.localAddress()->asString(), socket_factory
-                                                                                 .getListenSockets().size());
+    ENVOY_LOG(info, "address {}, socket {}", socket_factory.localAddress()->asString(),
+              socket_factory.getListenSockets().size());
     if (*socket_factory.localAddress() != *addr && listener.get().bindToPort()) {
       // worker_index() will default to 0 if not set which is the behavior before this field
       // was added. Thus, this should be safe for both roll forward and roll back.
       wrapped_reply.mutable_reply()->mutable_pass_connection_socket()->add_fds(
-          socket_factory.getListenSocket(1)->ioHandle()
-              .fdDoNotUse());
+          socket_factory.getListenSocket(0)->ioHandle().fdDoNotUse());
     }
   }
   return wrapped_reply;
