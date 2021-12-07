@@ -205,7 +205,7 @@ public:
   ApiListenerOptRef apiListener() override;
 
   Quic::QuicStatNames& quicStatNames() { return quic_stat_names_; }
-
+  std::vector<WorkerPtr>& getWorkers() { return workers_; }
   Instance& server_;
   ListenerComponentFactory& factory_;
 

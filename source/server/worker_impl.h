@@ -64,6 +64,7 @@ public:
   void initializeStats(Stats::Scope& scope) override;
   void stop() override;
   void stopListener(Network::ListenerConfig& listener, std::function<void()> completion) override;
+  Network::ConnectionHandlerPtr& getHandler() { return handler_; }
 
 private:
   void threadRoutine(GuardDog& guard_dog, const Event::PostCb& cb);

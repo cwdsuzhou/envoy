@@ -392,7 +392,6 @@ bool ListenerManagerImpl::addOrUpdateListenerInternal(
 
   auto existing_active_listener = getListenerByName(active_listeners_, name);
   auto existing_warming_listener = getListenerByName(warming_listeners_, name);
-
   // The listener should be updated back to its original state and the warming listener should be
   // removed.
   if (existing_warming_listener != warming_listeners_.end() &&

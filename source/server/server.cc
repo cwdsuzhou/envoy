@@ -37,6 +37,7 @@
 #include "source/common/local_info/local_info_impl.h"
 #include "source/common/memory/stats.h"
 #include "source/common/network/address_impl.h"
+#include "source/common/network/connection_impl.h"
 #include "source/common/network/io_socket_handle_impl.h"
 #include "source/common/network/socket_interface.h"
 #include "source/common/network/socket_interface_impl.h"
@@ -53,6 +54,7 @@
 #include "source/server/admin/utils.h"
 #include "source/server/configuration_impl.h"
 #include "source/server/connection_handler_impl.h"
+#include "source/server/active_tcp_listener.h"
 #include "source/server/guarddog_impl.h"
 #include "source/server/listener_hooks.h"
 #include "source/server/ssl_context_manager.h"
@@ -720,18 +722,20 @@ void InstanceImpl::startWorkers() {
 
     ENVOY_LOG(info, "runtime: server socket transfered");
 
-    // to remove drain when restart, start transfer.
-    auto add = local_info_->address()->asString();
+    // change drain logic when restart, start transfer before drain.
+    // auto add = local_info_->address()->asString();
+    auto add = "tcp://0.0.0.0:10086";
     auto fds = restarter_.duplicateParentConnectionSockets(add);
     ENVOY_LOG(info, "runtime: connection socket transfer finished fds size {}", fds.size());
     for (auto& fd : fds) {
       ENVOY_LOG(info, "runtime: uds, fd is : {}", fd);
       Network::IoHandlePtr io_handle = std::make_unique<Network::IoSocketHandleImpl>(fd);
       // bug exist here, skip now
-      break;
       if (io_handle->isOpen()) {
+        break;
         Network::SocketSharedPtr uds = std::make_shared<Network::UdsListenSocket>(
             std::move(io_handle), io_handle->localAddress());
+        ENVOY_LOG(info, "runtime: uds,nullptr : {}", uds == nullptr);
       }
     }
     restarter_.drainParentListeners();

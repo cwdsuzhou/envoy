@@ -4,11 +4,15 @@
 
 #include "source/common/buffer/buffer_impl.h"
 #include "source/common/memory/stats.h"
+#include "source/common/network/connection_impl.h"
 #include "source/common/network/utility.h"
 #include "source/common/stats/stat_merger.h"
 #include "source/common/stats/symbol_table_impl.h"
 #include "source/common/stats/utility.h"
 #include "source/server/listener_impl.h"
+#include "source/server/active_tcp_listener.h"
+#include "source/server/connection_handler_impl.h"
+#include "source/server/server.h"
 
 namespace Envoy {
 namespace Server {
@@ -118,12 +122,16 @@ HotRestartMessage HotRestartingParent::Internal::shutdownAdmin() {
 HotRestartMessage
 HotRestartingParent::Internal::getListenSocketsForChild(const HotRestartMessage::Request& request) {
   HotRestartMessage wrapped_reply;
-  ENVOY_LOG(info, "parse add {} started", request.pass_connection_socket().address());
+  ENVOY_LOG(info, "parse add {} started", request.pass_listen_socket().address());
   wrapped_reply.mutable_reply()->mutable_pass_listen_socket()->set_fd(-1);
   Network::Address::InstanceConstSharedPtr addr =
       Network::Utility::resolveUrl(request.pass_listen_socket().address());
   for (const auto& listener : server_->listenerManager().listeners()) {
     Network::ListenSocketFactory& socket_factory = listener.get().listenSocketFactory();
+    auto sockets = socket_factory.getListenSockets();
+    ENVOY_LOG(info, "address {}, local {}, socket {}", addr->asString(),
+              socket_factory.localAddress()->asString(), sockets.size());
+    // if (*socket_factory.localAddress() == *addr && listener.get().bindToPort()) {
     if (*socket_factory.localAddress() == *addr && listener.get().bindToPort()) {
       // worker_index() will default to 0 if not set which is the behavior before this field
       // was added. Thus, this should be safe for both roll forward and roll back.
@@ -142,22 +150,34 @@ HotRestartingParent::Internal::getListenSocketsForChild(const HotRestartMessage:
 HotRestartMessage HotRestartingParent::Internal::getConnectionSocketsForChild(
     const HotRestartMessage::Request& request) {
   HotRestartMessage wrapped_reply;
-  ENVOY_LOG(info, "parse add {} started", request.pass_connection_socket().address());
-  // auto add = child_address_.sun_path;
   wrapped_reply.mutable_reply()->mutable_pass_connection_socket()->fds();
   Network::Address::InstanceConstSharedPtr addr =
       Network::Utility::resolveUrl(request.pass_connection_socket().address());
-  ENVOY_LOG(info, "parse add {} finished", request.pass_connection_socket().address());
-  ENVOY_LOG(info, "get connection sockets for child for address {}", addr->asString());
-  for (const auto& listener : server_->listenerManager().listeners()) {
-    Network::ListenSocketFactory& socket_factory = listener.get().listenSocketFactory();
-    ENVOY_LOG(info, "address {}, socket {}", socket_factory.localAddress()->asString(),
-              socket_factory.getListenSockets().size());
-    if (*socket_factory.localAddress() != *addr && listener.get().bindToPort()) {
-      // worker_index() will default to 0 if not set which is the behavior before this field
-      // was added. Thus, this should be safe for both roll forward and roll back.
-      wrapped_reply.mutable_reply()->mutable_pass_connection_socket()->add_fds(
-          socket_factory.getListenSocket(0)->ioHandle().fdDoNotUse());
+
+  auto lmi = dynamic_cast<Envoy::Server::ListenerManagerImpl*>(&(server_->listenerManager()));
+  auto& wkrs = lmi->getWorkers();
+  for (auto& wk : wkrs) {
+    auto wki = dynamic_cast<Envoy::Server::WorkerImpl*>(wk.get());
+    auto con_handler = dynamic_cast<Envoy::Server::ConnectionHandlerImpl*>(wki->getHandler().get());
+    auto& lss = con_handler->getListeners();
+    for (auto& listenerPair : lss) {
+      auto& tcpListener = std::move(listenerPair.second).tcpListener()->get();
+      tcpListener.sockets()
+      for (auto& cont : tcpListener.connections_by_context_) {
+        for (auto& con : cont.second->connections_) {
+          auto sc = dynamic_cast<Envoy::Network::ConnectionImpl*>(con->connection_.get());
+          auto& t_socket = sc->transportSocket();
+          auto s_info = &(sc->streamInfo());
+          auto u_credentials = sc->unixSocketPeerCredentials();
+          ASSERT(t_socket, nullptr);
+          ASSERT(s_info, nullptr);
+          ASSERT(u_credentials, nullptr);
+          ENVOY_LOG(info, "parent: socket{}, ciphersuite:{}", sc->ioHandle().fdDoNotUse(),
+                    sc->ssl()->ciphersuiteString());
+          wrapped_reply.mutable_reply()->mutable_pass_connection_socket()->add_fds(
+              sc->ioHandle().fdDoNotUse());
+        }
+      }
     }
   }
   return wrapped_reply;

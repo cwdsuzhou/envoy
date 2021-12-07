@@ -59,23 +59,26 @@ public:
   Network::BalancedConnectionHandlerOptRef getBalancedHandlerByTag(uint64_t listener_tag) override;
   Network::BalancedConnectionHandlerOptRef
   getBalancedHandlerByAddress(const Network::Address::Instance& address) override;
-
-  // Network::UdpConnectionHandler
-  Network::UdpListenerCallbacksOptRef getUdpListenerCallbacks(uint64_t listener_tag) override;
-
-private:
   struct ActiveListenerDetails {
     // Strong pointer to the listener, whether TCP, UDP, QUIC, etc.
     Network::ConnectionHandler::ActiveListenerPtr listener_;
 
     absl::variant<absl::monostate, std::reference_wrapper<ActiveTcpListener>,
-        std::reference_wrapper<Network::UdpListenerCallbacks>>
+                  std::reference_wrapper<Network::UdpListenerCallbacks>>
         typed_listener_;
 
     // Helpers for accessing the data in the variant for cleaner code.
     ActiveTcpListenerOptRef tcpListener();
     UdpListenerCallbacksOptRef udpListener();
   };
+  // Network::UdpConnectionHandler
+  Network::UdpListenerCallbacksOptRef getUdpListenerCallbacks(uint64_t listener_tag) override;
+  std::list<std::pair<Network::Address::InstanceConstSharedPtr, ActiveListenerDetails>>&
+  getListeners() {
+    return listeners_;
+  }
+
+private:
   using ActiveListenerDetailsOptRef = absl::optional<std::reference_wrapper<ActiveListenerDetails>>;
   ActiveListenerDetailsOptRef findActiveListenerByTag(uint64_t listener_tag);
 

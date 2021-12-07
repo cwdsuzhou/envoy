@@ -93,9 +93,9 @@ struct ActiveTcpSocket : public Network::ListenerFilterManager,
   const bool hand_off_restored_destination_connections_;
   std::list<ListenerFilterWrapperPtr> accept_filters_;
   std::list<ListenerFilterWrapperPtr>::iterator iter_;
-  Event::TimerPtr timer_;
   std::unique_ptr<StreamInfo::StreamInfo> stream_info_;
-  bool connected_{false};
+    Event::TimerPtr timer_;
+    bool connected_{false};
 };
 
 } // namespace Server

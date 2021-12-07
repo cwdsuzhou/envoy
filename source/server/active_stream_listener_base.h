@@ -197,6 +197,9 @@ public:
    */
   void removeConnection(ActiveTcpConnection& connection);
 
+  absl::flat_hash_map<const Network::FilterChain*, ActiveConnectionCollectionPtr>
+      connections_by_context_;
+
 protected:
   /**
    * Return the active connections container attached to the given filter chain.
@@ -209,9 +212,6 @@ protected:
    * @param filter_chain supplies the filter chain to remove.
    */
   void removeFilterChain(const Network::FilterChain* filter_chain) override;
-
-  absl::flat_hash_map<const Network::FilterChain*, ActiveConnectionCollectionPtr>
-      connections_by_context_;
 };
 } // namespace Server
 } // namespace Envoy

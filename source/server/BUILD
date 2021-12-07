@@ -321,6 +321,7 @@ envoy_cc_library(
     deps = [
         ":hot_restarting_base",
         ":listener_manager_lib",
+        ":server_lib",
         "//source/common/memory:stats_lib",
         "//source/common/stats:stat_merger_lib",
         "//source/common/stats:symbol_table_lib",

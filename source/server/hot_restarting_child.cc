@@ -34,10 +34,11 @@ int HotRestartingChild::duplicateParentListenSocket(const std::string& address,
   if (!replyIsExpectedType(wrapped_reply.get(), HotRestartMessage::Reply::kPassListenSocket)) {
     return -1;
   }
+  ENVOY_LOG(info, "duplicateParentListenSocket, fd is : {}", wrapped_reply->reply().pass_listen_socket().fd());
   return wrapped_reply->reply().pass_listen_socket().fd();
 }
 
-std::vector<int> HotRestartingChild::duplicateParentConnectionSockets(const std::string&) {
+std::vector<int> HotRestartingChild::duplicateParentConnectionSockets(const std::string& add) {
   ENVOY_LOG(info, "sendHotRestartMessage: connection socket transfer request");
   std::vector<int> vec;
   if (restart_epoch_ == 0 || parent_terminated_) {
@@ -48,7 +49,6 @@ std::vector<int> HotRestartingChild::duplicateParentConnectionSockets(const std:
 
   HotRestartMessage wrapped_request;
   ENVOY_LOG(info, "sendHotRestartMessage: connection socket transfer set address");
-  auto add = "tcp://0.0.0.0:10086";
   wrapped_request.mutable_request()->mutable_pass_connection_socket()->set_address(add);
   sendHotRestartMessage(parent_address_, wrapped_request);
   ENVOY_LOG(info, "sendHotRestartMessage: connection socket transfer request");
