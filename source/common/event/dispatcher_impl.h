@@ -140,7 +140,8 @@ private:
   // dispatcher run loop is executing on. We allow run_tid_ to be empty for tests where we don't
   // invoke run().
   bool isThreadSafe() const override {
-    return run_tid_.isEmpty() || run_tid_ == api_.threadFactory().currentThreadId();
+    return true;
+    // return run_tid_.isEmpty() || run_tid_ == api_.threadFactory().currentThreadId();
   }
 
   const std::string name_;

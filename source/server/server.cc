@@ -724,20 +724,50 @@ void InstanceImpl::startWorkers() {
 
     // change drain logic when restart, start transfer before drain.
     // auto add = local_info_->address()->asString();
-    auto add = "tcp://0.0.0.0:10086";
-    auto fds = restarter_.duplicateParentConnectionSockets(add);
-    ENVOY_LOG(info, "runtime: connection socket transfer finished fds size {}", fds.size());
+    auto fds = restarter_.duplicateParentConnectionSockets("");
+    //    ENVOY_LOG(info, "runtime: uds, fd size : {}", fds.size());
     for (auto& fd : fds) {
       ENVOY_LOG(info, "runtime: uds, fd is : {}", fd);
       Network::IoHandlePtr io_handle = std::make_unique<Network::IoSocketHandleImpl>(fd);
-      // bug exist here, skip now
       if (io_handle->isOpen()) {
-        break;
-        Network::SocketSharedPtr uds = std::make_shared<Network::UdsListenSocket>(
-            std::move(io_handle), io_handle->localAddress());
-        ENVOY_LOG(info, "runtime: uds,nullptr : {}", uds == nullptr);
+        ENVOY_LOG(info, "runtime: uds, fd: {} is open", fd);
+        if (io_handle->localAddress() == nullptr) {
+          continue;
+        }
+        auto con_addr = io_handle->localAddress()->asString();
+        std::vector<absl::string_view> con_itms = absl::StrSplit(con_addr, ':');
+        auto con_port = con_itms[1];
+        ENVOY_LOG(info, "runtime: socket local address {}", con_addr);
+        ENVOY_LOG(info, "runtime: fd: {} is open, build success", fd);
+
+        auto lmi = dynamic_cast<Envoy::Server::ListenerManagerImpl*>(&(listenerManager()));
+        auto& wkrs = lmi->getWorkers();
+        auto wki = dynamic_cast<Envoy::Server::WorkerImpl*>(wkrs[0].get());
+        auto con_handler =
+            dynamic_cast<Envoy::Server::ConnectionHandlerImpl*>(wki->getHandler().get());
+        //          auto con_handler =
+        //              dynamic_cast<Envoy::Server::ConnectionHandlerImpl*>(getHandler().get());
+        auto& lss = con_handler->getListeners();
+        for (auto& listenerPair : lss) {
+          if (std::move(listenerPair.second).tcpListener() == absl::nullopt) {
+            continue;
+          }
+          auto& tcpListener = std::move(listenerPair.second).tcpListener()->get();
+          auto addr = listenerPair.first->asString();
+          std::vector<absl::string_view> itms = absl::StrSplit(addr, ':');
+          auto port = itms[1];
+          if (port == con_port) {
+            auto listener = dynamic_cast<Envoy::Network::TcpListenerImpl*>(tcpListener.listener());
+            (listener->cb_)
+                .onAccept(std::make_unique<Network::AcceptedSocketImpl>(
+                    std::move(io_handle), io_handle->localAddress(), io_handle->peerAddress()));
+            ENVOY_LOG(info, "runtime: accept finished");
+            break;
+          }
+        }
       }
     }
+
     restarter_.drainParentListeners();
     drain_manager_->startParentShutdownSequence();
   });

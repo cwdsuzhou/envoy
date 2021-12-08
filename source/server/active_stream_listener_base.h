@@ -86,17 +86,22 @@ public:
     // Create and run the filters
     config_->filterChainFactory().createListenerFilterChain(*active_socket);
     active_socket->continueFilterChain(true);
+    ENVOY_LOG(trace, "continueFilterChain finished");
 
     // Move active_socket to the sockets_ list if filter iteration needs to continue later.
     // Otherwise we let active_socket be destructed when it goes out of scope.
     if (active_socket->iter_ != active_socket->accept_filters_.end()) {
       active_socket->startTimer();
       LinkedList::moveIntoListBack(std::move(active_socket), sockets_);
+      ENVOY_LOG(trace, "moveIntoListBack finished");
+
     } else {
       if (!active_socket->connected_) {
         // If active_socket is about to be destructed, emit logs if a connection is not created.
         if (active_socket->stream_info_ != nullptr) {
           emitLogs(*config_, *active_socket->stream_info_);
+          ENVOY_LOG(trace, "emitLogs finished");
+
         } else {
           // If the active_socket is not connected, this socket is not promoted to active
           // connection. Thus the stream_info_ is owned by this active socket.

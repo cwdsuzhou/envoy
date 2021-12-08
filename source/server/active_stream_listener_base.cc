@@ -58,6 +58,7 @@ void ActiveStreamListenerBase::newConnection(Network::ConnectionSocketPtr&& sock
     server_conn_ptr->close(Network::ConnectionCloseType::NoFlush);
   }
   newActiveConnection(*filter_chain, std::move(server_conn_ptr), std::move(stream_info));
+  ENVOY_LOG(debug, "newActiveConnection finished");
 }
 
 ActiveConnections::ActiveConnections(OwnedActiveStreamListenerBase& listener,

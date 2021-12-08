@@ -29,7 +29,7 @@ public:
 
   static const absl::string_view GlobalMaxCxRuntimeKey;
 
-protected:
+// protected:
   TcpListenerCallbacks& cb_;
 
 private:

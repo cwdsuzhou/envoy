@@ -107,6 +107,7 @@ void ActiveTcpListener::onAcceptWorker(Network::ConnectionSocketPtr&& socket,
                                                          hand_off_restored_destination_connections);
 
   onSocketAccepted(std::move(active_socket));
+  ENVOY_LOG(trace, "onAcceptWorker finished");
 }
 
 void ActiveTcpListener::pauseListening() {

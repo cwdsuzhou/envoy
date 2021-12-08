@@ -295,6 +295,7 @@ public:
   ServerLifecycleNotifier::HandlePtr registerCallback(Stage stage, StageCallback callback) override;
   ServerLifecycleNotifier::HandlePtr
   registerCallback(Stage stage, StageCallbackWithCompletion callback) override;
+  Network::ConnectionHandlerPtr& getHandler() { return handler_; }
 
 private:
   enum class ReusePortDefault { True, False, Runtime };

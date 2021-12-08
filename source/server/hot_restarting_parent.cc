@@ -147,13 +147,10 @@ HotRestartingParent::Internal::getListenSocketsForChild(const HotRestartMessage:
   return wrapped_reply;
 }
 
-HotRestartMessage HotRestartingParent::Internal::getConnectionSocketsForChild(
-    const HotRestartMessage::Request& request) {
+HotRestartMessage
+HotRestartingParent::Internal::getConnectionSocketsForChild(const HotRestartMessage::Request&) {
   HotRestartMessage wrapped_reply;
   wrapped_reply.mutable_reply()->mutable_pass_connection_socket()->fds();
-  Network::Address::InstanceConstSharedPtr addr =
-      Network::Utility::resolveUrl(request.pass_connection_socket().address());
-
   auto lmi = dynamic_cast<Envoy::Server::ListenerManagerImpl*>(&(server_->listenerManager()));
   auto& wkrs = lmi->getWorkers();
   for (auto& wk : wkrs) {
@@ -161,19 +158,18 @@ HotRestartMessage HotRestartingParent::Internal::getConnectionSocketsForChild(
     auto con_handler = dynamic_cast<Envoy::Server::ConnectionHandlerImpl*>(wki->getHandler().get());
     auto& lss = con_handler->getListeners();
     for (auto& listenerPair : lss) {
+      if (std::move(listenerPair.second).tcpListener() == absl::nullopt) {
+        continue;
+      }
       auto& tcpListener = std::move(listenerPair.second).tcpListener()->get();
-      tcpListener.sockets()
+      ENVOY_LOG(info, "parent: listener address {}", listenerPair.first->asString());
       for (auto& cont : tcpListener.connections_by_context_) {
         for (auto& con : cont.second->connections_) {
           auto sc = dynamic_cast<Envoy::Network::ConnectionImpl*>(con->connection_.get());
-          auto& t_socket = sc->transportSocket();
-          auto s_info = &(sc->streamInfo());
-          auto u_credentials = sc->unixSocketPeerCredentials();
-          ASSERT(t_socket, nullptr);
-          ASSERT(s_info, nullptr);
-          ASSERT(u_credentials, nullptr);
-          ENVOY_LOG(info, "parent: socket{}, ciphersuite:{}", sc->ioHandle().fdDoNotUse(),
-                    sc->ssl()->ciphersuiteString());
+          if (sc == nullptr) {
+            continue;
+          }
+          ENVOY_LOG(info, "parent: add socket {}", sc->ioHandle().fdDoNotUse());
           wrapped_reply.mutable_reply()->mutable_pass_connection_socket()->add_fds(
               sc->ioHandle().fdDoNotUse());
         }
