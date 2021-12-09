@@ -39,7 +39,7 @@ void HotRestartingParent::initialize(Event::Dispatcher& dispatcher, Server::Inst
 
 void HotRestartingParent::onSocketEvent() {
   std::unique_ptr<HotRestartMessage> wrapped_request;
-  while ((wrapped_request = receiveHotRestartMessage(Blocking::No, *wrapped_request.get()))) {
+  while ((wrapped_request = receiveHotRestartMessage(Blocking::No, nullptr))) {
     ENVOY_LOG(info, "receive request {} content {}", wrapped_request->request().request_case(),
               wrapped_request->request().SerializeAsString());
     if (wrapped_request->requestreply_case() == HotRestartMessage::kReply) {
@@ -169,7 +169,12 @@ HotRestartingParent::Internal::getConnectionSocketsForChild(const HotRestartMess
           if (sc == nullptr) {
             continue;
           }
-          ENVOY_LOG(info, "parent: add socket {}", sc->ioHandle().fdDoNotUse());
+          if (!sc->ioHandle().isOpen()) {
+            continue;
+          }
+          ENVOY_LOG(info, "parent: add socket {}, local {}, remote {}", sc->ioHandle().fdDoNotUse(),
+                    sc->ioHandle().localAddress()->asString(),
+                    sc->ioHandle().peerAddress()->asString());
           wrapped_reply.mutable_reply()->mutable_pass_connection_socket()->add_fds(
               sc->ioHandle().fdDoNotUse());
         }

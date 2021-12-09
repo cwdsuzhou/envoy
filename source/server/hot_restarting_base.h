@@ -58,7 +58,7 @@ protected:
   // message is available. In either case, the HotRestartingBase may end up buffering some data for
   // the next protocol message, even if the function returns a protobuf.
   std::unique_ptr<envoy::HotRestartMessage>
-  receiveHotRestartMessage(Blocking block, const envoy::HotRestartMessage& proto);
+  receiveHotRestartMessage(Blocking block, const envoy::HotRestartMessage* proto);
 
   bool replyIsExpectedType(const envoy::HotRestartMessage* proto,
                            envoy::HotRestartMessage::Reply::ReplyCase oneof_type) const;

@@ -110,7 +110,6 @@ void HotRestartingBase::sendHotRestartMessage(sockaddr_un& address,
         for (int i = 0; i < proto.reply().pass_connection_socket().fds_size(); ++i) {
           fds[i] = proto.reply().pass_connection_socket().fds(i);
           len++;
-          // fds[i] = proto.reply().pass_connection_socket().fds(i);
         }
       } else {
         fds[0] = proto.reply().pass_listen_socket().fd();
@@ -163,7 +162,7 @@ void HotRestartingBase::sendHotRestartMessage(sockaddr_un& address,
                                         saved_errno));
     }
   }
-  ENVOY_LOG(info, "sendHotRestartMessage internal {} finished, size", proto.reply().reply_case());
+  ENVOY_LOG(info, "sendHotRestartMessage internal {} finished", proto.reply().reply_case());
   RELEASE_ASSERT(fcntl(my_domain_socket_, F_SETFL, O_NONBLOCK) != -1,
                  fmt::format("Set domain socket nonblocking failed, errno = {}", errno));
 }
@@ -193,8 +192,8 @@ void HotRestartingBase::getPassedFdIfPresent(HotRestartMessage* out, msghdr* mes
     }
 
     if (replyIsExpectedType(out, HotRestartMessage::Reply::kPassConnectionSocket)) {
-//      out->mutable_reply()->mutable_pass_connection_socket()->add_fds(
-//          *reinterpret_cast<int*>(CMSG_DATA(cmsg)));
+      //      out->mutable_reply()->mutable_pass_connection_socket()->add_fds(
+      //          *reinterpret_cast<int*>(CMSG_DATA(cmsg)));
     }
 
     RELEASE_ASSERT(CMSG_NXTHDR(message, cmsg) == nullptr,
@@ -226,7 +225,7 @@ std::unique_ptr<HotRestartMessage> HotRestartingBase::parseProtoAndResetState() 
 }
 
 std::unique_ptr<HotRestartMessage>
-HotRestartingBase::receiveHotRestartMessage(Blocking block, const envoy::HotRestartMessage& proto) {
+HotRestartingBase::receiveHotRestartMessage(Blocking block, const HotRestartMessage* proto) {
   // By default the domain socket is non blocking. If we need to block, make it blocking first.
   if (block == Blocking::Yes) {
     RELEASE_ASSERT(fcntl(my_domain_socket_, F_SETFL, 0) != -1,
@@ -235,10 +234,9 @@ HotRestartingBase::receiveHotRestartMessage(Blocking block, const envoy::HotRest
   ENVOY_LOG(info, "receiveHotRestartMessage internal started");
   initRecvBufIfNewMessage();
   int buff_len = 1;
-  if (replyIsExpectedType(&proto, HotRestartMessage::Reply::kPassConnectionSocket)) {
-    *const_cast<int*>(&buff_len) = proto.reply().pass_connection_socket().fds_size();
-    ENVOY_LOG(info, "receiveHotRestartMessage internal fd size {}",
-              proto.reply().pass_connection_socket().fds_size());
+  if (proto != nullptr && proto->requestreply_case() == HotRestartMessage::kRequest &&
+      proto->request().request_case() == HotRestartMessage::Request::kPassConnectionSocket) {
+    buff_len = MaxSendmsgSize;
   }
   const size_t max_size = CMSG_SPACE(sizeof(int) * FD_MAX_LEN);
   size_t size = CMSG_SPACE(sizeof(int) * buff_len);

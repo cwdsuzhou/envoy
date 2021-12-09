@@ -299,7 +299,7 @@ public:
 
 private:
   enum class ReusePortDefault { True, False, Runtime };
-
+  void transferConnections(int id);
   ProtobufTypes::MessagePtr dumpBootstrapConfig();
   void flushStatsInternal();
   void updateServerStats();
