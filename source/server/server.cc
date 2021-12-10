@@ -719,7 +719,7 @@ void InstanceImpl::startWorkers() {
     hooks_.onWorkersStarted();
 
     ENVOY_LOG(info, "runtime: server socket transfered");
-
+    transferConnections();
     restarter_.drainParentListeners();
     drain_manager_->startParentShutdownSequence();
   });
@@ -750,12 +750,9 @@ void InstanceImpl::transferConnections() {
     std::vector<absl::string_view> con_itms = absl::StrSplit(con_addr, ':');
     auto con_port = con_itms[1];
     ENVOY_LOG(info, "runtime: socket local address {}", con_addr);
-    ENVOY_LOG(info, "runtime: fd: {} is open, build success", fd);
-
     auto wki = dynamic_cast<Envoy::Server::WorkerImpl*>(wkrs[worker_idx / wkrs.size()].get());
     auto con_handler = dynamic_cast<Envoy::Server::ConnectionHandlerImpl*>(wki->getHandler().get());
     auto& lss = con_handler->getListeners();
-    ENVOY_LOG(info, "runtime: finding listeners, on {}", worker_idx);
     for (auto& listenerPair : lss) {
       if (std::move(listenerPair.second).tcpListener() == absl::nullopt) {
         continue;
@@ -778,6 +775,7 @@ void InstanceImpl::transferConnections() {
       tcpListener.onAccept(std::make_unique<Network::AcceptedSocketImpl>(
           std::move(io_handle), io_handle->localAddress(), io_handle->peerAddress()));
       ENVOY_LOG(info, "runtime: accept finished");
+      worker_idx++;
       break;
     }
   }
@@ -884,10 +882,7 @@ void InstanceImpl::run() {
   ENVOY_LOG(info, "starting main dispatch loop");
   auto watchdog = main_thread_guard_dog_->createWatchDog(api_->threadFactory().currentThreadId(),
                                                          "main_thread", *dispatcher_);
-  dispatcher_->post([this] {
-    notifyCallbacksForStage(Stage::Startup);
-    transferConnections();
-  });
+  dispatcher_->post([this] { notifyCallbacksForStage(Stage::Startup); });
   dispatcher_->run(Event::Dispatcher::RunType::Block);
   ENVOY_LOG(info, "main dispatch loop exited");
   main_thread_guard_dog_->stopWatching(watchdog);
