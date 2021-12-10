@@ -18,6 +18,7 @@ namespace Envoy {
 namespace Server {
 
 using HotRestartMessage = envoy::HotRestartMessage;
+using SocketInfo = envoy::HotRestartMessage_Reply_SocketInfo;
 
 HotRestartingParent::HotRestartingParent(int base_id, int restart_epoch,
                                          const std::string& socket_path, mode_t socket_mode)
@@ -150,7 +151,7 @@ HotRestartingParent::Internal::getListenSocketsForChild(const HotRestartMessage:
 HotRestartMessage
 HotRestartingParent::Internal::getConnectionSocketsForChild(const HotRestartMessage::Request&) {
   HotRestartMessage wrapped_reply;
-  wrapped_reply.mutable_reply()->mutable_pass_connection_socket()->fds();
+  wrapped_reply.mutable_reply()->mutable_pass_connection_socket()->sockets();
   auto lmi = dynamic_cast<Envoy::Server::ListenerManagerImpl*>(&(server_->listenerManager()));
   auto& wkrs = lmi->getWorkers();
   for (auto& wk : wkrs) {
@@ -175,8 +176,13 @@ HotRestartingParent::Internal::getConnectionSocketsForChild(const HotRestartMess
           ENVOY_LOG(info, "parent: add socket {}, local {}, remote {}", sc->ioHandle().fdDoNotUse(),
                     sc->ioHandle().localAddress()->asString(),
                     sc->ioHandle().peerAddress()->asString());
-          wrapped_reply.mutable_reply()->mutable_pass_connection_socket()->add_fds(
-              sc->ioHandle().fdDoNotUse());
+          Buffer::OwnedImpl buf;
+          sc->ioHandle().read(buf, 10240);
+          int fd = sc->ioHandle().fdDoNotUse();
+          auto add_socket =
+              wrapped_reply.mutable_reply()->mutable_pass_connection_socket()->add_sockets();
+          add_socket->set_fd(fd);
+          add_socket->set_buffer(buf.toString());
         }
       }
     }

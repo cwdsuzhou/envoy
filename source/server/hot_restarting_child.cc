@@ -6,6 +6,7 @@ namespace Envoy {
 namespace Server {
 
 using HotRestartMessage = envoy::HotRestartMessage;
+using SocketInfo = envoy::HotRestartMessage_Reply_SocketInfo;
 
 HotRestartingChild::HotRestartingChild(int base_id, int restart_epoch,
                                        const std::string& socket_path, mode_t socket_mode)
@@ -39,9 +40,10 @@ int HotRestartingChild::duplicateParentListenSocket(const std::string& address,
   return wrapped_reply->reply().pass_listen_socket().fd();
 }
 
-std::vector<int> HotRestartingChild::duplicateParentConnectionSockets(const std::string& add) {
+std::vector<SocketInfo>
+HotRestartingChild::duplicateParentConnectionSockets(const std::string& add) {
   ENVOY_LOG(info, "sendHotRestartMessage: connection socket transfer request");
-  std::vector<int> vec;
+  std::vector<SocketInfo> vec;
   if (restart_epoch_ == 0 || parent_terminated_) {
     ENVOY_LOG(info, "sendHotRestartMessage: epoch {}, terminated{}", restart_epoch_,
               parent_terminated_);
@@ -65,7 +67,7 @@ std::vector<int> HotRestartingChild::duplicateParentConnectionSockets(const std:
     return vec;
   }
   ENVOY_LOG(info, "sendHotRestartMessage: connection socket transfer response");
-  for (auto fd : wrapped_reply->reply().pass_connection_socket().fds()) {
+  for (auto fd : wrapped_reply->reply().pass_connection_socket().sockets()) {
     vec.push_back(fd);
   }
   return vec;

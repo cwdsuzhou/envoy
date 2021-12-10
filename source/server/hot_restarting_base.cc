@@ -11,6 +11,7 @@ namespace Envoy {
 namespace Server {
 
 using HotRestartMessage = envoy::HotRestartMessage;
+using SocketInfo = envoy::HotRestartMessage_Reply_SocketInfo;
 const int FD_MAX_LEN = 10240;
 
 static constexpr uint64_t MaxSendmsgSize = 4096;
@@ -107,8 +108,8 @@ void HotRestartingBase::sendHotRestartMessage(sockaddr_un& address,
          proto.reply().pass_listen_socket().fd() != -1) ||
         replyIsExpectedType(&proto, HotRestartMessage::Reply::kPassConnectionSocket)) {
       if (replyIsExpectedType(&proto, HotRestartMessage::Reply::kPassConnectionSocket)) {
-        for (int i = 0; i < proto.reply().pass_connection_socket().fds_size(); ++i) {
-          fds[i] = proto.reply().pass_connection_socket().fds(i);
+        for (int i = 0; i < proto.reply().pass_connection_socket().sockets().size(); ++i) {
+          fds[i] = proto.reply().pass_connection_socket().sockets(i).fd();
           len++;
         }
       } else {
@@ -117,7 +118,6 @@ void HotRestartingBase::sendHotRestartMessage(sockaddr_un& address,
       }
 
       ENVOY_LOG(info, "sendHotRestartMessage internal vector size {}", len);
-
       uint8_t control_buffer[CMSG_SPACE(sizeof(int) * FD_MAX_LEN)];
       memset(control_buffer, 0, CMSG_SPACE(sizeof(int) * len));
       message.msg_control = control_buffer;
@@ -130,6 +130,7 @@ void HotRestartingBase::sendHotRestartMessage(sockaddr_un& address,
         // *reinterpret_cast<int*>(CMSG_DATA(control_message)) = *vec.data();
         memcpy(CMSG_DATA(control_message), fds, sizeof(int) * len);
       }
+
       ASSERT(sent == total_size, "an fd passing message was too long for one sendmsg().");
     }
 
@@ -192,7 +193,13 @@ void HotRestartingBase::getPassedFdIfPresent(HotRestartMessage* out, msghdr* mes
     }
 
     if (replyIsExpectedType(out, HotRestartMessage::Reply::kPassConnectionSocket)) {
+      int* fds = reinterpret_cast<int*>(CMSG_DATA(cmsg));
       //      out->mutable_reply()->mutable_pass_connection_socket()->add_fds(
+      int socket_len = out->mutable_reply()->pass_connection_socket().sockets_size();
+      for (int i = 0; i < socket_len; ++i) {
+        auto socket = out->mutable_reply()->mutable_pass_connection_socket()->mutable_sockets(i);
+        socket->set_fd(*(fds + i));
+      }
       //          *reinterpret_cast<int*>(CMSG_DATA(cmsg)));
     }
 

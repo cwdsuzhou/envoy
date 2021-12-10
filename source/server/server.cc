@@ -725,19 +725,19 @@ void InstanceImpl::startWorkers() {
   });
 }
 
-void InstanceImpl::transferConnections(int id) {
+void InstanceImpl::transferConnections() {
   // change drain logic when restart, start transfer before drain.
   // auto add = local_info_->address()->asString();
-  auto fds = restarter_.duplicateParentConnectionSockets("");
+  auto sockets = restarter_.duplicateParentConnectionSockets("");
   //    ENVOY_LOG(info, "runtime: uds, fd size : {}", fds.size());
-  std::sort(fds.begin(), fds.end());
+  // std::sort(fds.begin(), fds.end());
   int worker_idx = 0;
   auto lmi = dynamic_cast<Envoy::Server::ListenerManagerImpl*>(&(listenerManager()));
   auto& wkrs = lmi->getWorkers();
-  for (auto& fd : fds) {
-    //worker_idx++;
-    fd = fds.at(id);
-    ENVOY_LOG(info, "runtime: uds, fd is : {}", fd);
+  for (auto& socket : sockets) {
+    int fd = socket.fd();
+    // worker_idx++;
+    ENVOY_LOG(info, "runtime: uds, fd is : {}, content: {}", socket.fd(), socket.buffer());
     Network::IoHandlePtr io_handle = std::make_unique<Network::IoSocketHandleImpl>(fd);
     if (!io_handle->isOpen()) {
       continue;
@@ -762,16 +762,21 @@ void InstanceImpl::transferConnections(int id) {
       }
       auto& tcpListener = std::move(listenerPair.second).tcpListener()->get();
       auto addr = listenerPair.first->asString();
-      std::vector<absl::string_view> itms = absl::StrSplit(addr, ':');
-      auto port = itms[1];
+      std::vector<absl::string_view> items = absl::StrSplit(addr, ':');
+      auto port = items[1];
       if (port != con_port) {
         continue;
       }
       ENVOY_LOG(info, "runtime: accept start");
-      auto listener = dynamic_cast<Envoy::Network::TcpListenerImpl*>(tcpListener.listener());
-      (listener->cb_)
-          .onAccept(std::make_unique<Network::AcceptedSocketImpl>(
-              std::move(io_handle), io_handle->localAddress(), io_handle->peerAddress()));
+      //      auto listener =
+      //      dynamic_cast<Envoy::Network::TcpListenerImpl*>(tcpListener.listener());
+      //      (listener->cb_)
+      //          .onAccept(std::make_unique<Network::AcceptedSocketImpl>(
+      //              std::move(io_handle), io_handle->localAddress(), io_handle->peerAddress()));
+      Buffer::OwnedImpl buf(socket.buffer());
+      io_handle->write(buf);
+      tcpListener.onAccept(std::make_unique<Network::AcceptedSocketImpl>(
+          std::move(io_handle), io_handle->localAddress(), io_handle->peerAddress()));
       ENVOY_LOG(info, "runtime: accept finished");
       break;
     }
@@ -879,9 +884,10 @@ void InstanceImpl::run() {
   ENVOY_LOG(info, "starting main dispatch loop");
   auto watchdog = main_thread_guard_dog_->createWatchDog(api_->threadFactory().currentThreadId(),
                                                          "main_thread", *dispatcher_);
-  transferConnections(0);
-  transferConnections(1);
-  dispatcher_->post([this] { notifyCallbacksForStage(Stage::Startup); });
+  dispatcher_->post([this] {
+    notifyCallbacksForStage(Stage::Startup);
+    transferConnections();
+  });
   dispatcher_->run(Event::Dispatcher::RunType::Block);
   ENVOY_LOG(info, "main dispatch loop exited");
   main_thread_guard_dog_->stopWatching(watchdog);
