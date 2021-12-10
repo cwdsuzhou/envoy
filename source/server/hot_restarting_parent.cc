@@ -178,8 +178,9 @@ HotRestartingParent::Internal::getConnectionSocketsForChild(const HotRestartMess
                     sc->ioHandle().peerAddress()->asString());
           Buffer::OwnedImpl buf;
           int fd = sc->ioHandle().fdDoNotUse();
-          sc->transportSocket()->doRead(buf);
-          ENVOY_LOG(info, "read buffer {} from socket {}", buf.length(), fd);
+          if (sc->buffer() != nullptr) {
+            ENVOY_LOG(info, "read buffer {} from socket {}", sc->buffer()->length(), fd);
+          }
           //          auto buf_w = sc->getWriteBuffer();
           //          if (buf_w.buffer.length() != 0) {
           //            ENVOY_LOG(info, "write buffer {} from socket {}", buf_w.buffer.toString(),

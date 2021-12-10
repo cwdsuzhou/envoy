@@ -130,6 +130,8 @@ public:
   // ScopeTrackedObject
   void dumpState(std::ostream& os, int indent_level) const override;
 
+  Buffer::InstancePtr& buffer(){return write_buffer_;}
+
 protected:
   // A convenience function which returns true if
   // 1) The read disable count is zero or
