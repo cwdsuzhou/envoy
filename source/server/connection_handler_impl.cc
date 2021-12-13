@@ -7,6 +7,8 @@
 
 #include "source/common/event/deferred_task.h"
 #include "source/common/network/utility.h"
+#include "source/common/network/address_impl.h"
+#include "source/common/network/utility.h"
 #include "source/common/runtime/runtime_features.h"
 #include "source/server/active_tcp_listener.h"
 
@@ -157,6 +159,33 @@ ConnectionHandlerImpl::findActiveListenerByTag(uint64_t listener_tag) {
     }
   }
 
+  return absl::nullopt;
+}
+
+ConnectionHandlerImpl::ActiveListenerDetailsOptRef
+ConnectionHandlerImpl::findActiveListenerByAddress(std::string address) {
+  std::unique_ptr<Network::Address::Ipv4Instance> ipv4;
+  std::unique_ptr<Network::Address::Ipv6Instance> ipv6;
+  std::vector<absl::string_view> con_items = absl::StrSplit(address, ':');
+  if (con_items.size() > 1) {
+    auto con_port = con_items[con_items.size() - 1];
+    int port = std::stoi(std::string(con_port));
+    ENVOY_LOG(debug, "runtime: socket local address {}, port {}", address, port);
+    ipv4 = std::make_unique<Network::Address::Ipv4Instance>("0.0.0.0", port);
+    ipv6 = std::make_unique<Network::Address::Ipv6Instance>("::", port);
+  }
+  for (auto& listener : listeners_) {
+    auto addr = listener.first->asString();
+    if ((ipv4 != nullptr) && (addr == ipv4->asString())) {
+      return listener.second;
+    }
+    if ((ipv6 != nullptr) && (addr == ipv6->asString())) {
+      return listener.second;
+    }
+    if (addr == address) {
+      return listener.second;
+    }
+  }
   return absl::nullopt;
 }
 

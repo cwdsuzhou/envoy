@@ -9,6 +9,7 @@
 #include "source/common/stats/stat_merger.h"
 #include "source/common/stats/symbol_table_impl.h"
 #include "source/common/stats/utility.h"
+#include "source/common/upstream/cluster_manager_impl.h"
 #include "source/server/listener_impl.h"
 #include "source/server/active_tcp_listener.h"
 #include "source/server/connection_handler_impl.h"
@@ -181,11 +182,6 @@ HotRestartingParent::Internal::getConnectionSocketsForChild(const HotRestartMess
           if (sc->buffer() != nullptr) {
             ENVOY_LOG(info, "read buffer {} from socket {}", sc->buffer()->length(), fd);
           }
-          //          auto buf_w = sc->getWriteBuffer();
-          //          if (buf_w.buffer.length() != 0) {
-          //            ENVOY_LOG(info, "write buffer {} from socket {}", buf_w.buffer.toString(),
-          //            fd);
-          //          }
           auto add_socket =
               wrapped_reply.mutable_reply()->mutable_pass_connection_socket()->add_sockets();
           add_socket->set_fd(fd);

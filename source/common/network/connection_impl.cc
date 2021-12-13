@@ -835,7 +835,9 @@ ClientConnectionImpl::ClientConnectionImpl(
     Network::TransportSocketPtr&& transport_socket,
     const Network::ConnectionSocket::OptionsSharedPtr& options)
     : ClientConnectionImpl(dispatcher, std::make_unique<ClientSocketImpl>(remote_address, options),
-                           source_address, std::move(transport_socket), options) {}
+                           source_address, std::move(transport_socket), options) {
+  ENVOY_CONN_LOG(debug, "client connection connecting to fd {}", *this, ioHandle().fdDoNotUse());
+}
 
 ClientConnectionImpl::ClientConnectionImpl(
     Event::Dispatcher& dispatcher, std::unique_ptr<ConnectionSocket> socket,
@@ -882,6 +884,7 @@ ClientConnectionImpl::ClientConnectionImpl(
       ioHandle().activateFileEvents(Event::FileReadyType::Write);
     }
   }
+  ENVOY_CONN_LOG(debug, "client connection connecting to fd {}", *this, ioHandle().fdDoNotUse());
 }
 
 void ClientConnectionImpl::connect() {

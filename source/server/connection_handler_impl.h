@@ -77,9 +77,10 @@ public:
   getListeners() {
     return listeners_;
   }
+  using ActiveListenerDetailsOptRef = absl::optional<std::reference_wrapper<ActiveListenerDetails>>;
+  ActiveListenerDetailsOptRef findActiveListenerByAddress(std::string address);
 
 private:
-  using ActiveListenerDetailsOptRef = absl::optional<std::reference_wrapper<ActiveListenerDetails>>;
   ActiveListenerDetailsOptRef findActiveListenerByTag(uint64_t listener_tag);
 
   // This has a value on worker threads, and no value on the main thread.
