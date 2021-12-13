@@ -40,6 +40,7 @@ public:
     void recordDynamics(envoy::HotRestartMessage::Reply::Stats* stats, const std::string& name,
                         Stats::StatName stat_name);
     void drainListeners();
+    void disableConnections();
 
   private:
     Server::Instance* const server_{};

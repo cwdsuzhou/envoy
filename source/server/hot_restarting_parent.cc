@@ -66,6 +66,7 @@ void HotRestartingParent::onSocketEvent() {
     case HotRestartMessage::Request::kPassConnectionSocket: {
       sendHotRestartMessage(child_address_,
                             internal_->getConnectionSocketsForChild(wrapped_request->request()));
+      internal_->disableConnections();
       break;
     }
 
@@ -193,6 +194,36 @@ HotRestartingParent::Internal::getConnectionSocketsForChild(const HotRestartMess
     }
   }
   return wrapped_reply;
+}
+void
+HotRestartingParent::Internal::disableConnections() {
+  HotRestartMessage wrapped_reply;
+  auto lmi = dynamic_cast<Envoy::Server::ListenerManagerImpl*>(&(server_->listenerManager()));
+  auto& wkrs = lmi->getWorkers();
+  for (auto& wk : wkrs) {
+    auto wki = dynamic_cast<Envoy::Server::WorkerImpl*>(wk.get());
+    auto con_handler = dynamic_cast<Envoy::Server::ConnectionHandlerImpl*>(wki->getHandler().get());
+    auto& lss = con_handler->getListeners();
+    for (auto& listenerPair : lss) {
+      if (std::move(listenerPair.second).tcpListener() == absl::nullopt) {
+        continue;
+      }
+      auto& tcpListener = std::move(listenerPair.second).tcpListener()->get();
+      for (auto& cont : tcpListener.connections_by_context_) {
+        for (auto& con : cont.second->connections_) {
+          auto sc = dynamic_cast<Envoy::Network::ConnectionImpl*>(con->connection_.get());
+          if (sc == nullptr) {
+            continue;
+          }
+          if (!sc->ioHandle().isOpen()) {
+            continue;
+          }
+          sc->readDisable(true);
+        }
+      }
+      tcpListener.pauseListening();
+    }
+  }
 }
 
 HotRestartMessage HotRestartingParent::Internal::getConnectionDataForChild(
