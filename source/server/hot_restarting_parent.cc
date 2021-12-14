@@ -172,6 +172,7 @@ HotRestartingParent::Internal::getConnectionSocketsForChild(const HotRestartMess
           if (sc == nullptr) {
             continue;
           }
+          // auto ssl_ptr = sc->ssl();
           if (!sc->ioHandle().isOpen()) {
             continue;
           }
@@ -193,6 +194,15 @@ HotRestartingParent::Internal::getConnectionSocketsForChild(const HotRestartMess
       }
     }
   }
+
+  for (auto& c : server_->clusterManager().clusters().active_clusters_) {
+    auto fds = server_->clusterManager().findConnections(c.first);
+    ENVOY_LOG(debug, "clusterManager: cluster {} fd size {}", c.first, fds.size());
+    for (auto fd : fds) {
+      ENVOY_LOG(debug, "clusterManager: fd {} ", fd);
+    }
+  }
+
   return wrapped_reply;
 }
 void

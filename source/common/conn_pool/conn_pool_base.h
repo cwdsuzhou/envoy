@@ -251,6 +251,15 @@ public:
     ASSERT(connecting_stream_capacity_ >= delta);
     connecting_stream_capacity_ -= delta;
   }
+  // Clients that are ready to handle additional streams.
+  // All entries are in state READY.
+  std::list<ActiveClientPtr> ready_clients_;
+
+  // Clients that are not ready to handle additional streams due to being BUSY or DRAINING.
+  std::list<ActiveClientPtr> busy_clients_;
+
+  // Clients that are not ready to handle additional streams because they are CONNECTING.
+  std::list<ActiveClientPtr> connecting_clients_;
 
 protected:
   virtual void onConnected(Envoy::ConnectionPool::ActiveClient&) {}
@@ -311,16 +320,6 @@ protected:
   // When calling purgePendingStreams, this list will be used to hold the streams we are about
   // to purge. We need this if one cancelled streams cancels a different pending stream
   std::list<PendingStreamPtr> pending_streams_to_purge_;
-
-  // Clients that are ready to handle additional streams.
-  // All entries are in state READY.
-  std::list<ActiveClientPtr> ready_clients_;
-
-  // Clients that are not ready to handle additional streams due to being BUSY or DRAINING.
-  std::list<ActiveClientPtr> busy_clients_;
-
-  // Clients that are not ready to handle additional streams because they are CONNECTING.
-  std::list<ActiveClientPtr> connecting_clients_;
 
   // The number of streams that can be immediately dispatched
   // if all CONNECTING connections become connected.

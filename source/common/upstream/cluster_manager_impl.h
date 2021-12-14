@@ -319,6 +319,8 @@ public:
 
   void drainConnections() override;
 
+  std::vector<int> findConnections(absl::string_view cluster);
+
 protected:
   virtual void postThreadLocalRemoveHosts(const Cluster& cluster, const HostVector& hosts_removed);
 
@@ -420,6 +422,14 @@ private:
                                               LoadBalancerContext* context) override;
       Host::CreateConnectionData tcpConn(LoadBalancerContext* context) override;
       Http::AsyncClient& httpAsyncClient() override;
+      std::map<std::vector<uint8_t>, Tcp::ConnectionPool::InstancePtr>*
+      getTcpContainer(const HostSharedPtr& host) {
+        auto container = parent_.host_tcp_conn_pool_map_.find(host);
+        if (container != parent_.host_tcp_conn_pool_map_.end()) {
+          return &container->second.pools_;
+        }
+        return nullptr;
+      }
 
       // Updates the hosts in the priority set.
       void updateHosts(const std::string& name, uint32_t priority,

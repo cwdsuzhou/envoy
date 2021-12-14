@@ -321,6 +321,8 @@ public:
    * Drain all connection pool connections owned by all clusters in the cluster manager.
    */
   virtual void drainConnections() PURE;
+
+  virtual std::vector<int> findConnections(absl::string_view cluster) PURE;
 };
 
 using ClusterManagerPtr = std::unique_ptr<ClusterManager>;

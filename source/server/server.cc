@@ -718,7 +718,7 @@ void InstanceImpl::startWorkers() {
     workers_started_ = true;
     hooks_.onWorkersStarted();
 
-    ENVOY_LOG(info, "runtime: server socket transfered");
+    ENVOY_LOG(info, "runtime: server socket transferred");
     transferConnections();
     restarter_.drainParentListeners();
     drain_manager_->startParentShutdownSequence();
@@ -751,10 +751,15 @@ void InstanceImpl::transferConnections() {
     Buffer::OwnedImpl buf(socket.buffer());
     io_handle->write(buf);
     auto& tcpListener = listener->get().tcpListener()->get();
+    tcpListener.pauseListening();
     tcpListener.onAccept(std::make_unique<Network::AcceptedSocketImpl>(
         std::move(io_handle), io_handle->localAddress(), io_handle->peerAddress()));
     ENVOY_LOG(debug, "runtime: accept finished");
     worker_idx++;
+    // transfer old connection data write when new instance start.
+    tcpListener.resumeListening();
+    ENVOY_LOG(debug, "clusterManager: cluster size {} ",
+              clusterManager().clusters().active_clusters_.size());
   }
 }
 

@@ -29,6 +29,7 @@
 #include "source/common/http/http1/conn_pool.h"
 #include "source/common/http/http2/conn_pool.h"
 #include "source/common/http/mixed_conn_pool.h"
+#include "source/common/network/connection_impl.h"
 #include "source/common/network/resolver_impl.h"
 #include "source/common/network/utility.h"
 #include "source/common/protobuf/utility.h"
@@ -969,6 +970,42 @@ void ClusterManagerImpl::drainConnections() {
       cluster_entry.second->drainAllConnPools();
     }
   });
+}
+
+std::vector<int> ClusterManagerImpl::findConnections(absl::string_view cluster) {
+  std::vector<int> v;
+  //TODO: add lock for push back.
+  tls_.runOnAllThreads([cluster, &v](OptRef<ThreadLocalClusterManagerImpl> cluster_manager) {
+    auto cluster_entry = cluster_manager->thread_local_clusters_.find(cluster);
+    if (cluster_entry != cluster_manager->thread_local_clusters_.end()) {
+      auto terms = cluster_entry->second->prioritySet().crossPriorityHostMap().get();
+      for (auto& item : *terms) {
+        auto ins = item.second;
+        auto containers = cluster_entry->second->getTcpContainer(ins);
+        if (containers == nullptr) {
+          ENVOY_LOG(debug, "can not find containers for {}", item.second->address()->asString());
+          continue;
+        }
+        for (auto& con : *containers) {
+          auto cpi = dynamic_cast<Envoy::Tcp::ConnPoolImpl*>(con.second.get());
+          for (auto* list :
+               {&cpi->ready_clients_, &cpi->busy_clients_, &cpi->connecting_clients_}) {
+            for (auto& client : *list) {
+              auto c = dynamic_cast<Envoy::Tcp::ActiveTcpClient*>(client.get());
+              auto conimpl =
+                  dynamic_cast<Envoy::Network::ClientConnectionImpl*>(c->connection_.get());
+              ENVOY_LOG(debug, "local {}, remote {}, fd {}, id{}",
+                        conimpl->ioHandle().localAddress()->asString(),
+                        conimpl->ioHandle().peerAddress()->asString(),
+                        conimpl->ioHandle().fdDoNotUse(), conimpl->id());
+              v.push_back(conimpl->ioHandle().fdDoNotUse());
+            }
+          }
+        }
+      }
+    }
+  });
+  return v;
 }
 
 void ClusterManagerImpl::postThreadLocalRemoveHosts(const Cluster& cluster,
