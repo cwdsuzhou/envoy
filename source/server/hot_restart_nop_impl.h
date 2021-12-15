@@ -19,11 +19,15 @@ public:
   void drainParentListeners() override {}
   int duplicateParentListenSocket(const std::string&, uint32_t) override { return -1; }
 
-  std::vector<envoy::HotRestartMessage_Reply_SocketInfo> duplicateParentConnectionSockets(const std::string&) override {
+  std::vector<envoy::HotRestartMessage_Reply_SocketInfo>
+  duplicateParentConnectionSockets(const std::string&) override {
     std::vector<envoy::HotRestartMessage_Reply_SocketInfo> a;
     return a;
   }
-  std::unique_ptr<envoy::HotRestartMessage> getConnectionData(int32_t) override { return nullptr; }
+  const std::string getConnectionData(std::string) override {
+    std::string empty;
+    return empty;
+  }
   void initialize(Event::Dispatcher&, Server::Instance&) override {}
   absl::optional<AdminShutdownResponse> sendParentAdminShutdownRequest() override {
     return absl::nullopt;

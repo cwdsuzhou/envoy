@@ -58,10 +58,10 @@ public:
    * @param worker_index supplies the socket/worker index to fetch. When using reuse_port sockets
    * @return int the fd or -1 if there is no bound listen port in the parent.
    */
-  virtual std::vector<envoy::HotRestartMessage_Reply_SocketInfo> duplicateParentConnectionSockets(const
-                                                                                 std::string& address) PURE;
+  virtual std::vector<envoy::HotRestartMessage_Reply_SocketInfo>
+  duplicateParentConnectionSockets(const std::string& address) PURE;
 
-  virtual std::unique_ptr<envoy::HotRestartMessage> getConnectionData(int32_t conn_id) PURE;
+  virtual const std::string getConnectionData(std::string conn_id) PURE;
 
   /**
    * Initialize the parent logic of our restarter. Meant to be called after initialization of a

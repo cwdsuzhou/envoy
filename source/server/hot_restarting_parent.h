@@ -43,6 +43,7 @@ public:
     void disableConnections();
 
   private:
+    std::map<std::string, Network::IoHandle&> handlers_;
     Server::Instance* const server_{};
   };
 

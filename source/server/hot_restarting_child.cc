@@ -73,9 +73,10 @@ HotRestartingChild::duplicateParentConnectionSockets(const std::string& add) {
   return vec;
 }
 
-std::unique_ptr<HotRestartMessage> HotRestartingChild::getConnectionData(int32_t conn_id) {
+const std::string HotRestartingChild::getConnectionData(std::string conn_id) {
+  std::string empty;
   if (restart_epoch_ == 0 || parent_terminated_) {
-    return nullptr;
+    return empty;
   }
 
   HotRestartMessage wrapped_request;
@@ -87,7 +88,7 @@ std::unique_ptr<HotRestartMessage> HotRestartingChild::getConnectionData(int32_t
   RELEASE_ASSERT(
       replyIsExpectedType(wrapped_reply.get(), HotRestartMessage::Reply::kPassConnectionData),
       "Hot restart parent did not respond as expected to get connection data request.");
-  return wrapped_reply;
+  return wrapped_reply->reply().pass_connection_data().connection_data();
 }
 
 std::unique_ptr<HotRestartMessage> HotRestartingChild::getParentStats() {

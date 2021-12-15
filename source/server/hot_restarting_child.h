@@ -15,8 +15,9 @@ public:
                      mode_t socket_mode);
 
   int duplicateParentListenSocket(const std::string& address, uint32_t worker_index);
-  std::vector<envoy::HotRestartMessage_Reply_SocketInfo> duplicateParentConnectionSockets(const std::string& address);
-  std::unique_ptr<envoy::HotRestartMessage> getConnectionData(int32_t conn_id);
+  std::vector<envoy::HotRestartMessage_Reply_SocketInfo>
+  duplicateParentConnectionSockets(const std::string& address);
+  const std::string getConnectionData(std::string conn_id);
   std::unique_ptr<envoy::HotRestartMessage> getParentStats();
   void drainParentListeners();
   absl::optional<HotRestart::AdminShutdownResponse> sendParentAdminShutdownRequest();

@@ -190,6 +190,9 @@ HotRestartingParent::Internal::getConnectionSocketsForChild(const HotRestartMess
           if (buf.length() > 0) {
             add_socket->set_buffer(buf.toString());
           }
+          std::string key(sc->ioHandle().localAddress()->asString() + "_" +
+                          sc->ioHandle().peerAddress()->asString());
+          handlers_.insert(std::pair<std::string, Network::IoHandle&>(key, sc->ioHandle()));
         }
       }
     }
@@ -205,8 +208,7 @@ HotRestartingParent::Internal::getConnectionSocketsForChild(const HotRestartMess
 
   return wrapped_reply;
 }
-void
-HotRestartingParent::Internal::disableConnections() {
+void HotRestartingParent::Internal::disableConnections() {
   HotRestartMessage wrapped_reply;
   auto lmi = dynamic_cast<Envoy::Server::ListenerManagerImpl*>(&(server_->listenerManager()));
   auto& wkrs = lmi->getWorkers();
@@ -241,21 +243,26 @@ HotRestartMessage HotRestartingParent::Internal::getConnectionDataForChild(
   HotRestartMessage wrapped_reply;
   Buffer::OwnedImpl buffer;
   auto id = request.pass_connection_data().connection_id();
-  for (const auto& listener : server_->listenerManager().listeners()) {
-    Network::ListenSocketFactory& socket_factory = listener.get().listenSocketFactory();
-    auto listenerd = socket_factory.getListenSocket(id);
-    ASSERT(listenerd, nullptr);
-    auto& handler = listenerd->ioHandle();
-    if (handler.isOpen()) {
-      Api::IoCallUint64Result result = handler.read(buffer, absl::nullopt);
-      if (!result.ok()) {
-      }
+  wrapped_reply.mutable_reply()->mutable_pass_connection_data()->set_connection_id(id);
+  auto iter = handlers_.find(id);
+  if (iter == handlers_.end()) {
+    return wrapped_reply;
+  }
+  auto& handler = iter->second;
+  if (handler.isOpen()) {
+    handler.enableFileEvents(Event::FileReadyType::Closed);
+    Api::IoCallUint64Result result = handler.read(buffer, absl::nullopt);
+    if (!result.ok()) {
+      ENVOY_LOG(error, "reader from handler failed {}",
+                result.err_.get()->getErrorDetails().data());
     }
+    handlers_.erase(id);
   }
   auto buf = buffer.toString();
-  wrapped_reply.mutable_reply()->mutable_pass_connection_data()->set_connection_id(id);
-  wrapped_reply.mutable_reply()->mutable_pass_connection_data()->set_allocated_connection_data(
-      &buf);
+  ENVOY_LOG(debug, "reader from handler bytes {}", buf.length());
+  if (buf.length() > 0) {
+    wrapped_reply.mutable_reply()->mutable_pass_connection_data()->set_connection_data(buf);
+  }
   return wrapped_reply;
 }
 

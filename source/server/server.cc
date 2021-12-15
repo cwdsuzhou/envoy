@@ -725,6 +725,12 @@ void InstanceImpl::startWorkers() {
   });
 }
 
+// transferConnections logic:
+// 1. child, parent connection fd transfer.
+// 2. parent disable io read
+// 3. child request data trans
+// 4. parent response, close io.
+
 void InstanceImpl::transferConnections() {
   auto sockets = restarter_.duplicateParentConnectionSockets("");
   int worker_idx = 0;
@@ -734,6 +740,7 @@ void InstanceImpl::transferConnections() {
     int fd = socket.fd();
     ENVOY_LOG(debug, "runtime: uds, fd is : {}, content: {}", socket.fd(), socket.buffer());
     Network::IoHandlePtr io_handle = std::make_unique<Network::IoSocketHandleImpl>(fd);
+    Network::IoHandlePtr io_handle_dump = io_handle->duplicate();
     if (!io_handle->isOpen()) {
       continue;
     }
@@ -744,6 +751,9 @@ void InstanceImpl::transferConnections() {
     auto con_addr = io_handle->localAddress()->asString();
     auto wki = dynamic_cast<Envoy::Server::WorkerImpl*>(wkrs[worker_idx / wkrs.size()].get());
     auto con_handler = dynamic_cast<Envoy::Server::ConnectionHandlerImpl*>(wki->getHandler().get());
+    std::string id(io_handle->localAddress()->asString() + "_" +
+                   io_handle->peerAddress()->asString());
+    ENVOY_LOG(debug, "handle id {}", id);
     auto listener = con_handler->findActiveListenerByAddress(con_addr);
     if (listener == absl::nullopt) {
       continue;
@@ -752,11 +762,17 @@ void InstanceImpl::transferConnections() {
     io_handle->write(buf);
     auto& tcpListener = listener->get().tcpListener()->get();
     tcpListener.pauseListening();
-    tcpListener.onAccept(std::make_unique<Network::AcceptedSocketImpl>(
-        std::move(io_handle), io_handle->localAddress(), io_handle->peerAddress()));
+    auto acceptedSocket = std::make_unique<Network::AcceptedSocketImpl>(
+        std::move(io_handle), io_handle->localAddress(), io_handle->peerAddress());
+    tcpListener.onAccept(reinterpret_cast<Network::ConnectionSocketPtr&&>(acceptedSocket));
     ENVOY_LOG(debug, "runtime: accept finished");
     worker_idx++;
-    // transfer old connection data write when new instance start.
+    auto data = restarter_.getConnectionData(id);
+    ENVOY_LOG(debug, "{} receive {} bytes data", id, data.length());
+    buf = Buffer::OwnedImpl(data);
+    if (buf.length() > 0) {
+      io_handle_dump->write(buf);
+    }
     tcpListener.resumeListening();
     ENVOY_LOG(debug, "clusterManager: cluster size {} ",
               clusterManager().clusters().active_clusters_.size());

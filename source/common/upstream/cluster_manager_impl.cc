@@ -974,7 +974,7 @@ void ClusterManagerImpl::drainConnections() {
 
 std::vector<int> ClusterManagerImpl::findConnections(absl::string_view cluster) {
   std::vector<int> v;
-  //TODO: add lock for push back.
+  // TODO: add lock for push back.
   tls_.runOnAllThreads([cluster, &v](OptRef<ThreadLocalClusterManagerImpl> cluster_manager) {
     auto cluster_entry = cluster_manager->thread_local_clusters_.find(cluster);
     if (cluster_entry != cluster_manager->thread_local_clusters_.end()) {
@@ -983,7 +983,7 @@ std::vector<int> ClusterManagerImpl::findConnections(absl::string_view cluster) 
         auto ins = item.second;
         auto containers = cluster_entry->second->getTcpContainer(ins);
         if (containers == nullptr) {
-          ENVOY_LOG(debug, "can not find containers for {}", item.second->address()->asString());
+          // ENVOY_LOG(debug, "can not find containers for {}", item.second->address()->asString());
           continue;
         }
         for (auto& con : *containers) {
@@ -994,7 +994,7 @@ std::vector<int> ClusterManagerImpl::findConnections(absl::string_view cluster) 
               auto c = dynamic_cast<Envoy::Tcp::ActiveTcpClient*>(client.get());
               auto conimpl =
                   dynamic_cast<Envoy::Network::ClientConnectionImpl*>(c->connection_.get());
-              ENVOY_LOG(debug, "local {}, remote {}, fd {}, id{}",
+              ENVOY_LOG(debug, "local {}, remote {}, fd {}, id {}",
                         conimpl->ioHandle().localAddress()->asString(),
                         conimpl->ioHandle().peerAddress()->asString(),
                         conimpl->ioHandle().fdDoNotUse(), conimpl->id());
