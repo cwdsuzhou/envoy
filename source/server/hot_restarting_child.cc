@@ -35,38 +35,26 @@ int HotRestartingChild::duplicateParentListenSocket(const std::string& address,
   if (!replyIsExpectedType(wrapped_reply.get(), HotRestartMessage::Reply::kPassListenSocket)) {
     return -1;
   }
-  ENVOY_LOG(info, "duplicateParentListenSocket, fd is : {}",
-            wrapped_reply->reply().pass_listen_socket().fd());
   return wrapped_reply->reply().pass_listen_socket().fd();
 }
 
 std::vector<SocketInfo>
 HotRestartingChild::duplicateParentConnectionSockets(const std::string& add) {
-  ENVOY_LOG(info, "sendHotRestartMessage: connection socket transfer request");
   std::vector<SocketInfo> vec;
   if (restart_epoch_ == 0 || parent_terminated_) {
-    ENVOY_LOG(info, "sendHotRestartMessage: epoch {}, terminated{}", restart_epoch_,
-              parent_terminated_);
     return vec;
   }
 
   HotRestartMessage wrapped_request;
-  ENVOY_LOG(info, "sendHotRestartMessage: connection socket transfer set address");
   wrapped_request.mutable_request()->mutable_pass_connection_socket()->set_address(add);
   sendHotRestartMessage(parent_address_, wrapped_request);
-  ENVOY_LOG(info, "sendHotRestartMessage: connection socket transfer request");
 
   std::unique_ptr<HotRestartMessage> wrapped_reply =
       receiveHotRestartMessage(Blocking::Yes, &wrapped_request);
 
-  ENVOY_LOG(info, "receiveHotRestartMessage internal {} started",
-            wrapped_reply->reply().reply_case());
-
   if (!replyIsExpectedType(wrapped_reply.get(), HotRestartMessage::Reply::kPassConnectionSocket)) {
-    ENVOY_LOG(info, "sendHotRestartMessage: connection socket transfer reply code err");
     return vec;
   }
-  ENVOY_LOG(info, "sendHotRestartMessage: connection socket transfer response");
   for (auto fd : wrapped_reply->reply().pass_connection_socket().sockets()) {
     vec.push_back(fd);
   }

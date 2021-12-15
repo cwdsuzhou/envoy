@@ -86,7 +86,6 @@ void HotRestartingBase::sendHotRestartMessage(sockaddr_un& address,
 
   uint8_t* next_byte_to_send = send_buf.data();
   uint64_t sent = 0;
-  ENVOY_LOG(info, "sendHotRestartMessage internal {} started", proto.reply().reply_case());
   while (sent < total_size) {
     const uint64_t cur_chunk_size = std::min(MaxSendmsgSize, total_size - sent);
     iovec iov[1];
@@ -117,7 +116,6 @@ void HotRestartingBase::sendHotRestartMessage(sockaddr_un& address,
         len = 1;
       }
 
-      ENVOY_LOG(info, "sendHotRestartMessage internal vector size {}", len);
       uint8_t control_buffer[CMSG_SPACE(sizeof(int) * FD_MAX_LEN)];
       memset(control_buffer, 0, CMSG_SPACE(sizeof(int) * len));
       message.msg_control = control_buffer;
@@ -163,7 +161,6 @@ void HotRestartingBase::sendHotRestartMessage(sockaddr_un& address,
                                         saved_errno));
     }
   }
-  ENVOY_LOG(info, "sendHotRestartMessage internal {} finished", proto.reply().reply_case());
   RELEASE_ASSERT(fcntl(my_domain_socket_, F_SETFL, O_NONBLOCK) != -1,
                  fmt::format("Set domain socket nonblocking failed, errno = {}", errno));
 }
@@ -238,7 +235,6 @@ HotRestartingBase::receiveHotRestartMessage(Blocking block, const HotRestartMess
     RELEASE_ASSERT(fcntl(my_domain_socket_, F_SETFL, 0) != -1,
                    fmt::format("Set domain socket blocking failed, errno = {}", errno));
   }
-  ENVOY_LOG(info, "receiveHotRestartMessage internal started");
   initRecvBufIfNewMessage();
   int buff_len = 1;
   if (proto != nullptr && proto->requestreply_case() == HotRestartMessage::kRequest &&
@@ -293,13 +289,11 @@ HotRestartingBase::receiveHotRestartMessage(Blocking block, const HotRestartMess
     }
   }
 
-  ENVOY_LOG(info, "receiveHotRestartMessage internal blocking");
   // Turn non-blocking back on if we made it blocking.
   if (block == Blocking::Yes) {
     RELEASE_ASSERT(fcntl(my_domain_socket_, F_SETFL, O_NONBLOCK) != -1,
                    fmt::format("Set domain socket nonblocking failed, errno = {}", errno));
   }
-  ENVOY_LOG(info, "receiveHotRestartMessage internal finished");
   getPassedFdIfPresent(ret.get(), &message);
   return ret;
 }

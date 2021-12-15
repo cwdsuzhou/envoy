@@ -125,16 +125,12 @@ HotRestartMessage HotRestartingParent::Internal::shutdownAdmin() {
 HotRestartMessage
 HotRestartingParent::Internal::getListenSocketsForChild(const HotRestartMessage::Request& request) {
   HotRestartMessage wrapped_reply;
-  ENVOY_LOG(info, "parse add {} started", request.pass_listen_socket().address());
   wrapped_reply.mutable_reply()->mutable_pass_listen_socket()->set_fd(-1);
   Network::Address::InstanceConstSharedPtr addr =
       Network::Utility::resolveUrl(request.pass_listen_socket().address());
   for (const auto& listener : server_->listenerManager().listeners()) {
     Network::ListenSocketFactory& socket_factory = listener.get().listenSocketFactory();
     auto sockets = socket_factory.getListenSockets();
-    ENVOY_LOG(info, "address {}, local {}, socket {}", addr->asString(),
-              socket_factory.localAddress()->asString(), sockets.size());
-    // if (*socket_factory.localAddress() == *addr && listener.get().bindToPort()) {
     if (*socket_factory.localAddress() == *addr && listener.get().bindToPort()) {
       // worker_index() will default to 0 if not set which is the behavior before this field
       // was added. Thus, this should be safe for both roll forward and roll back.
@@ -220,8 +216,8 @@ void HotRestartingParent::Internal::disableConnections() {
       if (std::move(listenerPair.second).tcpListener() == absl::nullopt) {
         continue;
       }
-      auto& tcpListener = std::move(listenerPair.second).tcpListener()->get();
-      for (auto& cont : tcpListener.connections_by_context_) {
+      auto& tcp_listener = std::move(listenerPair.second).tcpListener()->get();
+      for (auto& cont : tcp_listener.connections_by_context_) {
         for (auto& con : cont.second->connections_) {
           auto sc = dynamic_cast<Envoy::Network::ConnectionImpl*>(con->connection_.get());
           if (sc == nullptr) {
@@ -233,7 +229,7 @@ void HotRestartingParent::Internal::disableConnections() {
           sc->readDisable(true);
         }
       }
-      tcpListener.pauseListening();
+      tcp_listener.pauseListening();
     }
   }
 }

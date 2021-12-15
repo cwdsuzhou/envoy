@@ -760,11 +760,10 @@ void InstanceImpl::transferConnections() {
     }
     Buffer::OwnedImpl buf(socket.buffer());
     io_handle->write(buf);
-    auto& tcpListener = listener->get().tcpListener()->get();
-    tcpListener.pauseListening();
-    auto acceptedSocket = std::make_unique<Network::AcceptedSocketImpl>(
-        std::move(io_handle), io_handle->localAddress(), io_handle->peerAddress());
-    tcpListener.onAccept(reinterpret_cast<Network::ConnectionSocketPtr&&>(acceptedSocket));
+    auto& tcp_listener = listener->get().tcpListener()->get();
+    tcp_listener.pauseListening();
+    tcp_listener.onAccept(std::make_unique<Network::AcceptedSocketImpl>(
+        std::move(io_handle), io_handle->localAddress(), io_handle->peerAddress()));
     ENVOY_LOG(debug, "runtime: accept finished");
     worker_idx++;
     auto data = restarter_.getConnectionData(id);
@@ -773,7 +772,7 @@ void InstanceImpl::transferConnections() {
     if (buf.length() > 0) {
       io_handle_dump->write(buf);
     }
-    tcpListener.resumeListening();
+    tcp_listener.resumeListening();
     ENVOY_LOG(debug, "clusterManager: cluster size {} ",
               clusterManager().clusters().active_clusters_.size());
   }
