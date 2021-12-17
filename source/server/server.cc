@@ -719,9 +719,9 @@ void InstanceImpl::startWorkers() {
     hooks_.onWorkersStarted();
 
     ENVOY_LOG(info, "runtime: server socket transferred");
-    transferConnections();
     restarter_.drainParentListeners();
     drain_manager_->startParentShutdownSequence();
+    // transferConnections();
   });
 }
 

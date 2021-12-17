@@ -169,6 +169,7 @@ void DrainManagerImpl::startParentShutdownSequence() {
   parent_shutdown_timer_ = server_.dispatcher().createTimer([this]() -> void {
     // Shut down the parent now. It should have already been draining.
     ENVOY_LOG(info, "shutting down parent after drain");
+    server_.transferConnections();
     server_.hotRestart().sendParentTerminateRequest();
   });
 

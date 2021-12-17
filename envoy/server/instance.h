@@ -269,6 +269,8 @@ public:
    * TODO(mattklein123): This can be removed when version 1.20.0 is no longer supported.
    */
   virtual bool enableReusePortDefault() PURE;
+
+  virtual void transferConnections() PURE;
 };
 
 } // namespace Server

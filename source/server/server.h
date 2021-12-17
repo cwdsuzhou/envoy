@@ -297,9 +297,9 @@ public:
   registerCallback(Stage stage, StageCallbackWithCompletion callback) override;
   Network::ConnectionHandlerPtr& getHandler() { return handler_; }
 
+  void transferConnections();
 private:
   enum class ReusePortDefault { True, False, Runtime };
-  void transferConnections();
   ProtobufTypes::MessagePtr dumpBootstrapConfig();
   void flushStatsInternal();
   void updateServerStats();

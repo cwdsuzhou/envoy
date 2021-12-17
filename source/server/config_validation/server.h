@@ -111,7 +111,7 @@ public:
     return validation_context_;
   }
   bool enableReusePortDefault() override { return true; }
-
+  void transferConnections() {}
   Configuration::StatsConfig& statsConfig() override { return config_.statsConfig(); }
   envoy::config::bootstrap::v3::Bootstrap& bootstrap() override { return bootstrap_; }
   Configuration::ServerFactoryContext& serverFactoryContext() override { return server_contexts_; }
