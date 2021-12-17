@@ -730,6 +730,12 @@ void InstanceImpl::startWorkers() {
 // 2. parent disable io read
 // 3. child request data trans
 // 4. parent response, close io.
+// data including:
+// 1). writing buffer, wb
+// 2). reading buffer, rb
+// 3). data buffer, send when fd transferring, db
+// wb when fd transferring and rb disable.
+// so all date will go to rb, which we called db here.
 
 void InstanceImpl::transferConnections() {
   auto sockets = restarter_.duplicateParentConnectionSockets("");

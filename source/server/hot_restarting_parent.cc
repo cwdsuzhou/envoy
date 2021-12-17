@@ -161,7 +161,6 @@ HotRestartingParent::Internal::getConnectionSocketsForChild(const HotRestartMess
         continue;
       }
       auto& tcpListener = std::move(listenerPair.second).tcpListener()->get();
-      ENVOY_LOG(info, "parent: listener address {}", listenerPair.first->asString());
       for (auto& cont : tcpListener.connections_by_context_) {
         for (auto& con : cont.second->connections_) {
           auto sc = dynamic_cast<Envoy::Network::ConnectionImpl*>(con->connection_.get());
@@ -175,11 +174,9 @@ HotRestartingParent::Internal::getConnectionSocketsForChild(const HotRestartMess
           ENVOY_LOG(info, "parent: add socket {}, local {}, remote {}", sc->ioHandle().fdDoNotUse(),
                     sc->ioHandle().localAddress()->asString(),
                     sc->ioHandle().peerAddress()->asString());
-          Buffer::OwnedImpl buf;
           int fd = sc->ioHandle().fdDoNotUse();
-          if (sc->buffer() != nullptr) {
-            ENVOY_LOG(info, "read buffer {} from socket {}", sc->buffer()->length(), fd);
-          }
+          Buffer::OwnedImpl buf(sc->getReadBuffer().buffer.toString());
+          ENVOY_LOG(info, "read buffer {} from socket {}", buf.length(), fd);
           auto add_socket =
               wrapped_reply.mutable_reply()->mutable_pass_connection_socket()->add_sockets();
           add_socket->set_fd(fd);
@@ -223,7 +220,7 @@ void HotRestartingParent::Internal::disableConnections() {
           if (sc == nullptr) {
             continue;
           }
-          if (!sc->ioHandle().isOpen()) {
+          if (sc->state() != Network::Connection::State::Open || !sc->ioHandle().isOpen()) {
             continue;
           }
           sc->readDisable(true);
