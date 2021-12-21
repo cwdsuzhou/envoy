@@ -14,7 +14,7 @@ using HotRestartMessage = envoy::HotRestartMessage;
 using SocketInfo = envoy::HotRestartMessage_Reply_SocketInfo;
 const int FD_MAX_LEN = 10240;
 
-static constexpr uint64_t MaxSendmsgSize = 40960;
+static constexpr uint64_t MaxSendmsgSize = 4096;
 static constexpr absl::Duration CONNECTION_REFUSED_RETRY_DELAY = absl::Seconds(1);
 static constexpr int SENDMSG_MAX_RETRIES = 10;
 
@@ -241,6 +241,7 @@ HotRestartingBase::receiveHotRestartMessage(Blocking block, const HotRestartMess
       proto->request().request_case() == HotRestartMessage::Request::kPassConnectionSocket) {
     buff_len = FD_MAX_LEN;
   }
+
   const size_t max_size = CMSG_SPACE(sizeof(int) * FD_MAX_LEN);
   size_t size = CMSG_SPACE(sizeof(int) * buff_len);
   iovec iov[1];
@@ -267,12 +268,10 @@ HotRestartingBase::receiveHotRestartMessage(Blocking block, const HotRestartMess
     RELEASE_ASSERT(message.msg_flags == 0,
                    fmt::format("recvmsg() left msg_flags = {}", message.msg_flags));
     cur_msg_recvd_bytes_ += recvmsg_rc;
-
     // If we don't already know 'length', we're at the start of a new length+protobuf message!
     if (!expected_proto_length_.has_value()) {
       // We are not ok with messages so fragmented that the length doesn't even come in one piece.
       RELEASE_ASSERT(recvmsg_rc >= 8, "received a brokenly tiny message fragment.");
-
       expected_proto_length_ = be64toh(*reinterpret_cast<uint64_t*>(recv_buf_.data()));
       // Expand the buffer from its default 4096 if this message is going to be longer.
       if (expected_proto_length_.value() > MaxSendmsgSize - sizeof(uint64_t)) {

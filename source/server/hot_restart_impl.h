@@ -132,6 +132,7 @@ private:
   SharedMemory* shmem_;
   ProcessSharedMutex log_lock_;
   ProcessSharedMutex access_log_lock_;
+  std::mutex get_data_lock_;
 };
 
 } // namespace Server

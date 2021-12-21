@@ -124,7 +124,10 @@ HotRestartImpl::duplicateParentConnectionSockets(const std::string& address) {
 }
 
 const std::string HotRestartImpl::getConnectionData(std::string conn_id) {
-  return as_child_.getConnectionData(conn_id);
+  get_data_lock_.lock();
+  auto ret_data = as_child_.getConnectionData(conn_id);
+  get_data_lock_.unlock();
+  return ret_data;
 }
 
 void HotRestartImpl::initialize(Event::Dispatcher& dispatcher, Server::Instance& server) {
