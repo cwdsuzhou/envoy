@@ -14,7 +14,7 @@ using HotRestartMessage = envoy::HotRestartMessage;
 using SocketInfo = envoy::HotRestartMessage_Reply_SocketInfo;
 const int FD_MAX_LEN = 10240;
 
-static constexpr uint64_t MaxSendmsgSize = 4096;
+static constexpr uint64_t MaxSendmsgSize = 40960;
 static constexpr absl::Duration CONNECTION_REFUSED_RETRY_DELAY = absl::Seconds(1);
 static constexpr int SENDMSG_MAX_RETRIES = 10;
 
@@ -239,7 +239,7 @@ HotRestartingBase::receiveHotRestartMessage(Blocking block, const HotRestartMess
   int buff_len = 1;
   if (proto != nullptr && proto->requestreply_case() == HotRestartMessage::kRequest &&
       proto->request().request_case() == HotRestartMessage::Request::kPassConnectionSocket) {
-    buff_len = MaxSendmsgSize;
+    buff_len = FD_MAX_LEN;
   }
   const size_t max_size = CMSG_SPACE(sizeof(int) * FD_MAX_LEN);
   size_t size = CMSG_SPACE(sizeof(int) * buff_len);
