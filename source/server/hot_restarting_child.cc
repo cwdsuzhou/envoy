@@ -6,7 +6,6 @@ namespace Envoy {
 namespace Server {
 
 using HotRestartMessage = envoy::HotRestartMessage;
-using SocketInfo = envoy::HotRestartMessage_Reply_SocketInfo;
 
 HotRestartingChild::HotRestartingChild(int base_id, int restart_epoch,
                                        const std::string& socket_path, mode_t socket_mode)
@@ -38,11 +37,10 @@ int HotRestartingChild::duplicateParentListenSocket(const std::string& address,
   return wrapped_reply->reply().pass_listen_socket().fd();
 }
 
-std::vector<SocketInfo>
+const std::unique_ptr<HotRestartMessage>
 HotRestartingChild::duplicateParentConnectionSockets(const std::string& add) {
-  std::vector<SocketInfo> vec;
   if (restart_epoch_ == 0 || parent_terminated_) {
-    return vec;
+    return nullptr;
   }
 
   HotRestartMessage wrapped_request;
@@ -53,12 +51,9 @@ HotRestartingChild::duplicateParentConnectionSockets(const std::string& add) {
       receiveHotRestartMessage(Blocking::Yes, &wrapped_request);
 
   if (!replyIsExpectedType(wrapped_reply.get(), HotRestartMessage::Reply::kPassConnectionSocket)) {
-    return vec;
+    return wrapped_reply;
   }
-  for (auto fd : wrapped_reply->reply().pass_connection_socket().sockets()) {
-    vec.push_back(fd);
-  }
-  return vec;
+  return wrapped_reply;
 }
 
 const std::string HotRestartingChild::getConnectionData(std::string conn_id) {

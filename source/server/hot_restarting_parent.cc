@@ -21,6 +21,8 @@ namespace Server {
 using HotRestartMessage = envoy::HotRestartMessage;
 using SocketInfo = envoy::HotRestartMessage_Reply_SocketInfo;
 
+const int MAX_FD_SIZE = 100;
+
 HotRestartingParent::HotRestartingParent(int base_id, int restart_epoch,
                                          const std::string& socket_path, mode_t socket_mode)
     : HotRestartingBase(base_id), restart_epoch_(restart_epoch) {
@@ -66,7 +68,7 @@ void HotRestartingParent::onSocketEvent() {
     case HotRestartMessage::Request::kPassConnectionSocket: {
       sendHotRestartMessage(child_address_,
                             internal_->getConnectionSocketsForChild(wrapped_request->request()));
-      //internal_->disableConnections();
+      // internal_->disableConnections();
       break;
     }
 
@@ -167,13 +169,18 @@ HotRestartingParent::Internal::getConnectionSocketsForChild(const HotRestartMess
           if (sc == nullptr) {
             continue;
           }
-          // auto ssl_ptr = sc->ssl();
           if (!sc->ioHandle().isOpen()) {
             continue;
           }
+          con_handler->dispatcher().post([sc]() { sc->readDisable(true); });
           ENVOY_LOG(info, "parent: add socket {}, local {}, remote {}", sc->ioHandle().fdDoNotUse(),
                     sc->ioHandle().localAddress()->asString(),
                     sc->ioHandle().peerAddress()->asString());
+          std::string key(sc->ioHandle().localAddress()->asString() + "_" +
+                          sc->ioHandle().peerAddress()->asString());
+          if (handlers_.find(key) != handlers_.end()) {
+            continue;
+          }
           int fd = sc->ioHandle().fdDoNotUse();
           Buffer::OwnedImpl buf(sc->getReadBuffer().buffer.toString());
           ENVOY_LOG(info, "read buffer {} from socket {}", buf.length(), fd);
@@ -183,21 +190,23 @@ HotRestartingParent::Internal::getConnectionSocketsForChild(const HotRestartMess
           if (buf.length() > 0) {
             add_socket->set_buffer(buf.toString());
           }
-          std::string key(sc->ioHandle().localAddress()->asString() + "_" +
-                          sc->ioHandle().peerAddress()->asString());
           handlers_.insert(std::pair<std::string, Network::IoHandle&>(key, sc->ioHandle()));
+          if (wrapped_reply.reply().pass_connection_socket().sockets_size() >= MAX_FD_SIZE) {
+            wrapped_reply.mutable_reply()->mutable_pass_connection_socket()->set_has_more_fd(true);
+            return wrapped_reply;
+          }
         }
       }
     }
   }
-//
-//  for (auto& c : server_->clusterManager().clusters().active_clusters_) {
-//    auto fds = server_->clusterManager().findConnections(c.first);
-//    ENVOY_LOG(debug, "clusterManager: cluster {} fd size {}", c.first, fds.size());
-//    for (auto fd : fds) {
-//      ENVOY_LOG(debug, "clusterManager: fd {} ", fd);
-//    }
-//  }
+  //
+  //  for (auto& c : server_->clusterManager().clusters().active_clusters_) {
+  //    auto fds = server_->clusterManager().findConnections(c.first);
+  //    ENVOY_LOG(debug, "clusterManager: cluster {} fd size {}", c.first, fds.size());
+  //    for (auto fd : fds) {
+  //      ENVOY_LOG(debug, "clusterManager: fd {} ", fd);
+  //    }
+  //  }
 
   return wrapped_reply;
 }

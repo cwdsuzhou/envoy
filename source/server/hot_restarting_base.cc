@@ -86,6 +86,7 @@ void HotRestartingBase::sendHotRestartMessage(sockaddr_un& address,
 
   uint8_t* next_byte_to_send = send_buf.data();
   uint64_t sent = 0;
+  ENVOY_LOG(debug, "pb total_size: {}", total_size);
   while (sent < total_size) {
     const uint64_t cur_chunk_size = std::min(MaxSendmsgSize, total_size - sent);
     iovec iov[1];
@@ -125,7 +126,6 @@ void HotRestartingBase::sendHotRestartMessage(sockaddr_un& address,
       control_message->cmsg_type = SCM_RIGHTS;
       control_message->cmsg_len = CMSG_LEN(sizeof(int) * len);
       if (len > 0) {
-        // *reinterpret_cast<int*>(CMSG_DATA(control_message)) = *vec.data();
         memcpy(CMSG_DATA(control_message), fds, sizeof(int) * len);
       }
 
@@ -140,7 +140,6 @@ void HotRestartingBase::sendHotRestartMessage(sockaddr_un& address,
       auto result = os_sys_calls.sendmsg(my_domain_socket_, &message, 0);
       rc = result.return_value_;
       saved_errno = result.errno_;
-
       if (rc == static_cast<int>(cur_chunk_size)) {
         sent = true;
         break;

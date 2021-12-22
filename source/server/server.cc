@@ -737,52 +737,66 @@ void InstanceImpl::startWorkers() {
 // wb when fd transferring and rb disable.
 // so all date will go to rb, which we called db here.
 
+using PassConnectionSocket = envoy::HotRestartMessage_Reply_PassConnectionSocket;
+
 void InstanceImpl::transferConnections() {
-  auto sockets = restarter_.duplicateParentConnectionSockets("");
-  int worker_idx = 0;
+  uint32_t worker_idx = 0;
   auto lmi = dynamic_cast<Envoy::Server::ListenerManagerImpl*>(&(listenerManager()));
   auto& wkrs = lmi->getWorkers();
-  for (auto& socket : sockets) {
-    auto wki = dynamic_cast<Envoy::Server::WorkerImpl*>(wkrs[worker_idx % wkrs.size()].get());
-    auto con_handler = dynamic_cast<Envoy::Server::ConnectionHandlerImpl*>(wki->getHandler().get());
-    con_handler->dispatcher().post([con_handler, &socket, &restarter = restarter_]() {
-      int fd = socket.fd();
-      ENVOY_LOG(debug, "runtime: uds, fd is : {}, content: {}", socket.fd(), socket.buffer());
-      Network::IoHandlePtr io_handle = std::make_unique<Network::IoSocketHandleImpl>(fd);
-      Network::IoHandlePtr io_handle_dump = io_handle->duplicate();
-      if (!io_handle->isOpen()) {
-        return;
-      }
-      ENVOY_LOG(debug, "runtime: uds, fd: {} is open", fd);
-      if (io_handle->localAddress() == nullptr) {
-        return;
-      }
-      auto con_addr = io_handle->localAddress()->asString();
+  bool has_more_data = true;
+  while (has_more_data) {
+    auto socket_replay = restarter_.duplicateParentConnectionSockets("");
+    if (socket_replay == nullptr) {
+      break;
+    }
+    auto& replay = socket_replay->reply().pass_connection_socket();
+    ENVOY_LOG(debug, "runtime: receive uds, fd size: {}", replay.sockets_size());
+    has_more_data = replay.has_more_fd();
+    ENVOY_LOG(debug, "runtime: received has more fd");
+    for (auto socket : replay.sockets()) {
+      ENVOY_LOG(debug, "runtime: received uds");
+      auto wki = dynamic_cast<Envoy::Server::WorkerImpl*>(wkrs[worker_idx % wkrs.size()].get());
+      auto con_handler =
+          dynamic_cast<Envoy::Server::ConnectionHandlerImpl*>(wki->getHandler().get());
+      con_handler->dispatcher().post([con_handler, &socket, &restarter = restarter_]() {
+        int fd = socket.fd();
+        ENVOY_LOG(debug, "runtime: uds, fd is : {}, content: {}", socket.fd(), socket.buffer());
+        Network::IoHandlePtr io_handle = std::make_unique<Network::IoSocketHandleImpl>(fd);
+        Network::IoHandlePtr io_handle_dump = io_handle->duplicate();
+        if (!io_handle->isOpen()) {
+          return;
+        }
+        ENVOY_LOG(debug, "runtime: uds, fd: {} is open", fd);
+        if (io_handle->localAddress() == nullptr) {
+          return;
+        }
+        auto con_addr = io_handle->localAddress()->asString();
 
-      std::string id(io_handle->localAddress()->asString() + "_" +
-                     io_handle->peerAddress()->asString());
-      ENVOY_LOG(debug, "handle id {}", id);
-      auto listener = con_handler->findActiveListenerByAddress(con_addr);
-      if (listener == absl::nullopt) {
-        return;
-      }
-      Buffer::OwnedImpl buf(socket.buffer());
-      io_handle->write(buf);
-      auto& tcp_listener = listener->get().tcpListener()->get();
-      tcp_listener.onAccept(std::make_unique<Network::AcceptedSocketImpl>(
-          std::move(io_handle), io_handle->localAddress(), io_handle->peerAddress()));
-      auto data = restarter.getConnectionData(id);
-      ENVOY_LOG(debug, "{} receive {} bytes data", id, data.length());
-      Buffer::OwnedImpl data_buf(data);
-      if (data_buf.length() > 0) {
-        io_handle_dump->write(data_buf);
-      }
-    });
+        std::string id(io_handle->localAddress()->asString() + "_" +
+                       io_handle->peerAddress()->asString());
+        ENVOY_LOG(debug, "handle id {}", id);
+        auto listener = con_handler->findActiveListenerByAddress(con_addr);
+        if (listener == absl::nullopt) {
+          return;
+        }
+        Buffer::OwnedImpl buf(socket.buffer());
+        io_handle->write(buf);
+        auto& tcp_listener = listener->get().tcpListener()->get();
+        tcp_listener.onAccept(std::make_unique<Network::AcceptedSocketImpl>(
+            std::move(io_handle), io_handle->localAddress(), io_handle->peerAddress()));
+        auto data = restarter.getConnectionData(id);
+        ENVOY_LOG(debug, "{} receive {} bytes data", id, data.length());
+        Buffer::OwnedImpl data_buf(data);
+        if (data_buf.length() > 0) {
+          io_handle_dump->write(data_buf);
+        }
+      });
 
-    ENVOY_LOG(debug, "runtime: accept finished");
-    worker_idx++;
-    ENVOY_LOG(debug, "clusterManager: cluster size {} ",
-              clusterManager().clusters().active_clusters_.size());
+      ENVOY_LOG(debug, "runtime: accept finished");
+      worker_idx++;
+      ENVOY_LOG(debug, "clusterManager: cluster size {} ",
+                clusterManager().clusters().active_clusters_.size());
+    }
   }
 }
 
