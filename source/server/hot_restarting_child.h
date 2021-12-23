@@ -6,8 +6,6 @@
 namespace Envoy {
 namespace Server {
 
-using PassConnectionSocket = envoy::HotRestartMessage_Reply_PassConnectionSocket;
-
 /**
  * The child half of hot restarting. Issues requests and commands to the parent.
  */
@@ -17,8 +15,8 @@ public:
                      mode_t socket_mode);
 
   int duplicateParentListenSocket(const std::string& address, uint32_t worker_index);
-  const std::unique_ptr<envoy::HotRestartMessage>
-  duplicateParentConnectionSockets(const std::string& address);
+  std::vector<envoy::HotRestartMessage_Reply_SocketInfo>
+  duplicateParentConnectionSockets(bool* has_more_data);
   const std::string getConnectionData(std::string conn_id);
   std::unique_ptr<envoy::HotRestartMessage> getParentStats();
   void drainParentListeners();

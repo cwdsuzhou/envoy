@@ -6,6 +6,7 @@ namespace Envoy {
 namespace Server {
 
 using HotRestartMessage = envoy::HotRestartMessage;
+using SocketInfo = envoy::HotRestartMessage_Reply_SocketInfo;
 
 HotRestartingChild::HotRestartingChild(int base_id, int restart_epoch,
                                        const std::string& socket_path, mode_t socket_mode)
@@ -37,23 +38,27 @@ int HotRestartingChild::duplicateParentListenSocket(const std::string& address,
   return wrapped_reply->reply().pass_listen_socket().fd();
 }
 
-const std::unique_ptr<HotRestartMessage>
-HotRestartingChild::duplicateParentConnectionSockets(const std::string& add) {
+std::vector<SocketInfo> HotRestartingChild::duplicateParentConnectionSockets(bool* has_more_data) {
+  std::vector<SocketInfo> vec;
   if (restart_epoch_ == 0 || parent_terminated_) {
-    return nullptr;
+    return vec;
   }
 
   HotRestartMessage wrapped_request;
-  wrapped_request.mutable_request()->mutable_pass_connection_socket()->set_address(add);
+  wrapped_request.mutable_request()->mutable_pass_connection_socket()->set_address("");
   sendHotRestartMessage(parent_address_, wrapped_request);
 
   std::unique_ptr<HotRestartMessage> wrapped_reply =
       receiveHotRestartMessage(Blocking::Yes, &wrapped_request);
 
   if (!replyIsExpectedType(wrapped_reply.get(), HotRestartMessage::Reply::kPassConnectionSocket)) {
-    return wrapped_reply;
+    return vec;
   }
-  return wrapped_reply;
+  for (auto fd : wrapped_reply->reply().pass_connection_socket().sockets()) {
+    vec.push_back(fd);
+  }
+  *has_more_data = wrapped_reply->reply().pass_connection_socket().has_more_fd();
+  return vec;
 }
 
 const std::string HotRestartingChild::getConnectionData(std::string conn_id) {

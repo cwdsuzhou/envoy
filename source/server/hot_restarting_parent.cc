@@ -257,7 +257,6 @@ HotRestartMessage HotRestartingParent::Internal::getConnectionDataForChild(
       ENVOY_LOG(error, "reader from handler failed {}",
                 result.err_.get()->getErrorDetails().data());
     }
-    handlers_.erase(id);
   }
   auto buf = buffer.toString();
   ENVOY_LOG(debug, "reader from handler bytes {}", buf.length());

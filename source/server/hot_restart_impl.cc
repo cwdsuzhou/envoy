@@ -118,12 +118,12 @@ int HotRestartImpl::duplicateParentListenSocket(const std::string& address, uint
   return as_child_.duplicateParentListenSocket(address, worker_index);
 }
 
-const std::unique_ptr<envoy::HotRestartMessage>
-HotRestartImpl::duplicateParentConnectionSockets(const std::string& address) {
+std::vector<envoy::HotRestartMessage_Reply_SocketInfo>
+HotRestartImpl::duplicateParentConnectionSockets(bool* has_more_data) {
   get_data_lock_.lock();
-  auto sockets =  as_child_.duplicateParentConnectionSockets(address);
+  auto ret_data = as_child_.duplicateParentConnectionSockets(has_more_data);
   get_data_lock_.unlock();
-  return sockets;
+  return ret_data;
 }
 
 const std::string HotRestartImpl::getConnectionData(std::string conn_id) {

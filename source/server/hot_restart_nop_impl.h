@@ -19,9 +19,10 @@ public:
   void drainParentListeners() override {}
   int duplicateParentListenSocket(const std::string&, uint32_t) override { return -1; }
 
-  const std::unique_ptr<envoy::HotRestartMessage>
-  duplicateParentConnectionSockets(const std::string&) override {
-    return nullptr;
+  std::vector<envoy::HotRestartMessage_Reply_SocketInfo>
+  duplicateParentConnectionSockets(bool*) override {
+    std::vector<envoy::HotRestartMessage_Reply_SocketInfo> a;
+    return a;
   }
   const std::string getConnectionData(std::string) override {
     std::string empty;

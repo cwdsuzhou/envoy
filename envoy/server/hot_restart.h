@@ -16,8 +16,6 @@ namespace Server {
 
 class Instance;
 
-using PassConnectionSocket = envoy::HotRestartMessage_Reply_PassConnectionSocket;
-
 /**
  * Abstracts functionality required to "hot" (live) restart the server including code and
  * configuration. Right now this interface assumes a UNIX like socket interface for fd passing
@@ -60,8 +58,8 @@ public:
    * @param worker_index supplies the socket/worker index to fetch. When using reuse_port sockets
    * @return int the fd or -1 if there is no bound listen port in the parent.
    */
-  virtual const std::unique_ptr<envoy::HotRestartMessage>
-  duplicateParentConnectionSockets(const std::string& address) PURE;
+  virtual std::vector<envoy::HotRestartMessage_Reply_SocketInfo>
+  duplicateParentConnectionSockets(bool* has_more_data) PURE;
 
   virtual const std::string getConnectionData(std::string conn_id) PURE;
 
