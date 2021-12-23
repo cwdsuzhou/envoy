@@ -148,6 +148,8 @@ HotRestartingParent::Internal::getListenSocketsForChild(const HotRestartMessage:
   return wrapped_reply;
 }
 
+WaitGroup wgcon;
+
 HotRestartMessage
 HotRestartingParent::Internal::getConnectionSocketsForChild(const HotRestartMessage::Request&) {
   HotRestartMessage wrapped_reply;
@@ -172,7 +174,12 @@ HotRestartingParent::Internal::getConnectionSocketsForChild(const HotRestartMess
           if (!sc->ioHandle().isOpen()) {
             continue;
           }
-          con_handler->dispatcher().post([sc]() { sc->readDisable(true); });
+          wgcon.Add();
+          con_handler->dispatcher().post([sc]() {
+            sc->readDisable(true);
+            wgcon.Done();
+          });
+          wgcon.Wait();
           ENVOY_LOG(info, "parent: add socket {}, local {}, remote {}", sc->ioHandle().fdDoNotUse(),
                     sc->ioHandle().localAddress()->asString(),
                     sc->ioHandle().peerAddress()->asString());
