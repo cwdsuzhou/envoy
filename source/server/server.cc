@@ -721,7 +721,6 @@ void InstanceImpl::startWorkers() {
     ENVOY_LOG(info, "runtime: server socket transferred");
     restarter_.drainParentListeners();
     drain_manager_->startParentShutdownSequence();
-    // transferConnections();
   });
 }
 
@@ -752,7 +751,11 @@ void InstanceImpl::transferConnections() {
       auto con_handler =
           dynamic_cast<Envoy::Server::ConnectionHandlerImpl*>(wki->getHandler().get());
       con_handler->dispatcher().post([con_handler, &socket, &restarter = restarter_]() {
-        int fd = socket.fd();
+        int fd = dup(socket.fd());
+        auto ret = close(socket.fd());
+        if (ret < 0) {
+          ENVOY_LOG(debug, "close fd: {} failed", socket.fd());
+        }
         ENVOY_LOG(debug, "runtime: uds, fd is : {}, content: {}", socket.fd(), socket.buffer());
         Network::IoHandlePtr io_handle = std::make_unique<Network::IoSocketHandleImpl>(fd);
         Network::IoHandlePtr io_handle_dump = io_handle->duplicate();
@@ -780,7 +783,6 @@ void InstanceImpl::transferConnections() {
         auto& tcp_listener = listener->get().tcpListener()->get();
         tcp_listener.onAccept(std::make_unique<Network::AcceptedSocketImpl>(
             std::move(io_handle), io_handle->localAddress(), io_handle->peerAddress()));
-
         auto data = restarter.getConnectionData(id);
         ENVOY_LOG(debug, "{} receive {} bytes data", id, data.length());
         Buffer::OwnedImpl data_buf(data);

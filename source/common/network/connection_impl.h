@@ -130,7 +130,9 @@ public:
   // ScopeTrackedObject
   void dumpState(std::ostream& os, int indent_level) const override;
 
-  Buffer::InstancePtr& buffer(){return write_buffer_;}
+  Buffer::InstancePtr& buffer() { return write_buffer_; }
+
+  void closeSocketTransfer(ConnectionEvent close_type);
 
 protected:
   // A convenience function which returns true if

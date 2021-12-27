@@ -174,21 +174,21 @@ HotRestartingParent::Internal::getConnectionSocketsForChild(const HotRestartMess
           if (!sc->ioHandle().isOpen()) {
             continue;
           }
+          int fd = dup(sc->ioHandle().fdDoNotUse());
           wgcon.Add();
-          con_handler->dispatcher().post([sc]() {
-            sc->readDisable(true);
-            wgcon.Done();
-          });
-          wgcon.Wait();
           ENVOY_LOG(info, "parent: add socket {}, local {}, remote {}", sc->ioHandle().fdDoNotUse(),
                     sc->ioHandle().localAddress()->asString(),
                     sc->ioHandle().peerAddress()->asString());
           std::string key(sc->ioHandle().localAddress()->asString() + "_" +
                           sc->ioHandle().peerAddress()->asString());
+          con_handler->dispatcher().post([sc]() {
+            sc->ioHandle().close();
+            wgcon.Done();
+          });
+          wgcon.Wait();
           if (handlers_.find(key) != handlers_.end()) {
             continue;
           }
-          int fd = sc->ioHandle().fdDoNotUse();
           Buffer::OwnedImpl buf(sc->getReadBuffer().buffer.toString());
           ENVOY_LOG(info, "read buffer {} from socket {}", buf.length(), fd);
           auto add_socket =
@@ -197,7 +197,7 @@ HotRestartingParent::Internal::getConnectionSocketsForChild(const HotRestartMess
           if (buf.length() > 0) {
             add_socket->set_buffer(buf.toString());
           }
-          handlers_.insert(std::pair<std::string, Network::IoHandle&>(key, sc->ioHandle()));
+          handlers_.insert(std::pair<std::string, Network::ConnectionImpl*>(key, sc));
           if (wrapped_reply.reply().pass_connection_socket().sockets_size() >= MAX_FD_SIZE) {
             wrapped_reply.mutable_reply()->mutable_pass_connection_socket()->set_has_more_fd(true);
             return wrapped_reply;
@@ -239,7 +239,12 @@ void HotRestartingParent::Internal::disableConnections() {
           if (sc->state() != Network::Connection::State::Open || !sc->ioHandle().isOpen()) {
             continue;
           }
-          sc->readDisable(true);
+          con_handler->dispatcher().post([sc]() {
+            sc->ioHandle().close();
+            // ->close();
+            // ->close(Envoy::Network::ConnectionCloseType::NoFlush);
+            sc->ioHandle().enableFileEvents(Event::FileReadyType::Closed);
+          });
         }
       }
       tcp_listener.pauseListening();
@@ -250,25 +255,21 @@ void HotRestartingParent::Internal::disableConnections() {
 HotRestartMessage HotRestartingParent::Internal::getConnectionDataForChild(
     const HotRestartMessage::Request& request) {
   HotRestartMessage wrapped_reply;
-  Buffer::OwnedImpl buffer;
   auto id = request.pass_connection_data().connection_id();
   wrapped_reply.mutable_reply()->mutable_pass_connection_data()->set_connection_id(id);
   auto iter = handlers_.find(id);
   if (iter == handlers_.end()) {
     return wrapped_reply;
   }
-  auto& handler = iter->second;
-  if (handler.isOpen()) {
-    Api::IoCallUint64Result result = handler.read(buffer, absl::nullopt);
-    if (!result.ok()) {
-      ENVOY_LOG(error, "reader from handler failed {}",
-                result.err_.get()->getErrorDetails().data());
-    }
-  }
-  auto buf = buffer.toString();
-  ENVOY_LOG(debug, "reader from handler bytes {}", buf.length());
-  if (buf.length() > 0) {
-    wrapped_reply.mutable_reply()->mutable_pass_connection_data()->set_connection_data(buf);
+  auto con = iter->second;
+  Buffer::OwnedImpl buffer(con->buffer()->toString());
+  buffer.add(con->getWriteBuffer().buffer);
+  con->dispatcher().post(
+      [con]() { con->closeSocketTransfer(Envoy::Network::ConnectionEvent::LocalClose); });
+  ENVOY_LOG(debug, "reader from handler bytes {}", buffer.length());
+  if (buffer.length() > 0) {
+    wrapped_reply.mutable_reply()->mutable_pass_connection_data()->set_connection_data(
+        buffer.toString());
   }
   return wrapped_reply;
 }

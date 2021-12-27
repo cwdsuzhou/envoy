@@ -267,6 +267,32 @@ void ConnectionImpl::closeSocket(ConnectionEvent close_type) {
   ConnectionImpl::raiseEvent(close_type);
 }
 
+void ConnectionImpl::closeSocketTransfer(ConnectionEvent close_type) {
+  // No need for a delayed close (if pending) now that the socket is being closed.
+  if (delayed_close_timer_) {
+    delayed_close_timer_->disableTimer();
+    delayed_close_timer_ = nullptr;
+  }
+
+  ENVOY_CONN_LOG(debug, "closing socket: {}", *this, static_cast<uint32_t>(close_type));
+  transport_socket_->closeSocket(close_type);
+
+  // Drain input and output buffers.
+  updateReadBufferStats(0, 0);
+  updateWriteBufferStats(0, 0);
+
+  // As the socket closes, drain any remaining data.
+  // The data won't be written out at this point, and where there are reference
+  // counted buffer fragments, it helps avoid lifetime issues with the
+  // connection outlasting the subscriber.
+  write_buffer_->drain(write_buffer_->length());
+
+  connection_stats_.reset();
+
+  // Call the base class directly as close() is called in the destructor.
+  ConnectionImpl::raiseEvent(close_type);
+}
+
 void ConnectionImpl::noDelay(bool enable) {
   // There are cases where a connection to localhost can immediately fail (e.g., if the other end
   // does not have enough fds, reaches a backlog limit, etc.). Because we run with deferred error
@@ -465,11 +491,10 @@ void ConnectionImpl::write(Buffer::Instance& data, bool end_stream, bool through
     current_write_buffer_ = &data;
     current_write_end_stream_ = end_stream;
     FilterStatus status = filter_manager_.onWrite();
-    current_write_buffer_ = nullptr;
-
     if (FilterStatus::StopIteration == status) {
       return;
     }
+    current_write_buffer_ = nullptr;
   }
 
   write_end_stream_ = end_stream;

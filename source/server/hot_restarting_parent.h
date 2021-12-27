@@ -2,6 +2,7 @@
 
 #include "source/common/common/hash.h"
 #include "source/server/hot_restarting_base.h"
+#include "source/common/network/connection_impl.h"
 
 namespace Envoy {
 namespace Server {
@@ -43,7 +44,7 @@ public:
     void disableConnections();
 
   private:
-    std::map<std::string, Network::IoHandle&> handlers_;
+    std::map<std::string, Network::ConnectionImpl*> handlers_;
     Server::Instance* const server_{};
   };
 
