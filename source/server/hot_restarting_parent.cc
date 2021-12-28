@@ -241,8 +241,6 @@ void HotRestartingParent::Internal::disableConnections() {
           }
           con_handler->dispatcher().post([sc]() {
             sc->ioHandle().close();
-            // ->close();
-            // ->close(Envoy::Network::ConnectionCloseType::NoFlush);
             sc->ioHandle().enableFileEvents(Event::FileReadyType::Closed);
           });
         }
@@ -263,7 +261,10 @@ HotRestartMessage HotRestartingParent::Internal::getConnectionDataForChild(
   }
   auto con = iter->second;
   Buffer::OwnedImpl buffer(con->buffer()->toString());
-  buffer.add(con->getWriteBuffer().buffer);
+  auto w_buf = con->getCurrentWriteBuffer();
+  if (w_buf != nullptr) {
+    buffer.add(*w_buf);
+  }
   con->dispatcher().post(
       [con]() { con->closeSocketTransfer(Envoy::Network::ConnectionEvent::LocalClose); });
   ENVOY_LOG(debug, "reader from handler bytes {}", buffer.length());

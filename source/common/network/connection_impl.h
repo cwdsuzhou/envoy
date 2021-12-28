@@ -106,6 +106,8 @@ public:
     return {*current_write_buffer_, current_write_end_stream_};
   }
 
+  Buffer::Instance* getCurrentWriteBuffer() { return current_write_buffer_; }
+
   // Network::TransportSocketCallbacks
   IoHandle& ioHandle() final { return socket_->ioHandle(); }
   const IoHandle& ioHandle() const override { return socket_->ioHandle(); }
