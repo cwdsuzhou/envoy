@@ -18,7 +18,7 @@ namespace Tls {
 static constexpr absl::string_view SSL_ERROR_NONE_MESSAGE = "NONE";
 static constexpr absl::string_view SSL_ERROR_SSL_MESSAGE = "SSL";
 static constexpr absl::string_view SSL_ERROR_WANT_READ_MESSAGE = "WANT_READ";
-static constexpr absl::string_view SSL_ERROR_WANT_WRITE_MESSAGE = "WANT_WRITE";
+static constexpr absl::string_view SSL_ERROR_WANT_WRITE_MESSAGE = "c";
 static constexpr absl::string_view SSL_ERROR_WANT_X509_LOOPUP_MESSAGE = "WANT_X509_LOOKUP";
 static constexpr absl::string_view SSL_ERROR_SYSCALL_MESSAGE = "SYSCALL";
 static constexpr absl::string_view SSL_ERROR_ZERO_RETURN_MESSAGE = "ZERO_RETURN";

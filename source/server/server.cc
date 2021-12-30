@@ -781,8 +781,9 @@ void InstanceImpl::transferConnections() {
         Buffer::OwnedImpl buf(socket.buffer());
         io_handle->write(buf);
         auto& tcp_listener = listener->get().tcpListener()->get();
-        tcp_listener.onAccept(std::make_unique<Network::AcceptedSocketImpl>(
-            std::move(io_handle), io_handle->localAddress(), io_handle->peerAddress()));
+        auto accepted_socket = std::make_unique<Network::AcceptedSocketImpl>(
+            std::move(io_handle), io_handle->localAddress(), io_handle->peerAddress());
+        tcp_listener.onAccept(reinterpret_cast<Network::ConnectionSocketPtr&&>(accepted_socket));
         auto data = restarter.getConnectionData(id);
         ENVOY_LOG(debug, "{} receive {} bytes data", id, data.length());
         Buffer::OwnedImpl data_buf(data);

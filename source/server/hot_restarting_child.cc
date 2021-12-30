@@ -45,7 +45,7 @@ std::vector<SocketInfo> HotRestartingChild::duplicateParentConnectionSockets(boo
   }
 
   HotRestartMessage wrapped_request;
-  wrapped_request.mutable_request()->mutable_pass_connection_socket()->set_address("");
+  wrapped_request.mutable_request()->mutable_pass_connection_socket();
   sendHotRestartMessage(parent_address_, wrapped_request);
 
   std::unique_ptr<HotRestartMessage> wrapped_reply =
